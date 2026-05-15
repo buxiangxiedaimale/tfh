@@ -14,6 +14,7 @@ import { useTodoStore } from "@/store/todo-store";
 
 export function InlineTaskAdd() {
   const addTask = useTodoStore((s) => s.addTask);
+  const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
   const activeView = useTodoStore((s) => s.activeView);
   const projects = useTodoStore((s) => s.projects);
   const [title, setTitle] = useState("");
@@ -29,6 +30,16 @@ export function InlineTaskAdd() {
       .catch(() => setAiConfigured(false));
   }, []);
 
+  const addQuickTodayTask = (data: Parameters<typeof addTask>[0]) => {
+    addTask({
+      ...data,
+      dueDate: new Date().toISOString().slice(0, 10),
+    });
+    setSelectedTaskId(null);
+    setTitle("");
+    inputRef.current?.focus();
+  };
+
   const handleAdd = async () => {
     const trimmed = title.trim();
     if (!trimmed || loading) return;
@@ -40,9 +51,7 @@ export function InlineTaskAdd() {
       if (aiConfigured) {
         const { data, error } = await parseTaskWithAI(trimmed);
         if (data?.title?.trim()) {
-          addTask(taskFromParsedIntent(data, activeView, projects));
-          setTitle("");
-          inputRef.current?.focus();
+          addQuickTodayTask(taskFromParsedIntent(data, activeView, projects));
           return;
         }
         if (
@@ -50,23 +59,17 @@ export function InlineTaskAdd() {
           (error.includes("未配置") || error.includes("DEEPSEEK"))
         ) {
           setAiConfigured(false);
-          addTask(taskFromPlainText(trimmed, activeView));
-          setTitle("");
-          inputRef.current?.focus();
+          addQuickTodayTask(taskFromPlainText(trimmed, activeView));
           return;
         }
         if (error) {
-          addTask(taskFromPlainText(trimmed, activeView));
-          setTitle("");
+          addQuickTodayTask(taskFromPlainText(trimmed, activeView));
           setHint("AI 解析失败，已按原文添加");
-          inputRef.current?.focus();
           return;
         }
       }
 
-      addTask(taskFromPlainText(trimmed, activeView));
-      setTitle("");
-      inputRef.current?.focus();
+      addQuickTodayTask(taskFromPlainText(trimmed, activeView));
     } finally {
       setLoading(false);
     }
@@ -128,9 +131,9 @@ export function InlineTaskAdd() {
         {hint ? (
           <span className="text-amber-600 dark:text-amber-400">{hint}</span>
         ) : aiConfigured ? (
-          <>点击「添加」智能解析；设置日期、项目等请点右上角 +</>
+          <>点击「添加」直接生成今天任务；详细设置请点右上角 +</>
         ) : (
-          <>点击「添加」快速创建；设置日期、项目等请点右上角 +</>
+          <>点击「添加」直接生成今天任务；详细设置请点右上角 +</>
         )}
       </p>
     </div>
