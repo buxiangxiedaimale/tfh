@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8f7f4;
+  --foreground: #1a1a1a;
+  --surface-1: #ffffff;
+  --surface-2: #f3f2ef;
+  --surface-3: #e8e6e1;
+  --border: #e5e2dc;
+  --muted-foreground: #6b6b6b;
+  --accent: #e85d4c;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --priority-low: #3b82f6;
+  --priority-medium: #f59e0b;
+  --priority-high: #ef4444;
+  --memo-bg: #f5f3ef;
+  --memo-card: #ffffff;
+  --memo-card-border: #ebe8e2;
+  --memo-tag: #5c7c5c;
+  --memo-foreground: #2c2c2c;
+}
+
+.dark {
+  --background: #121110;
+  --foreground: #f5f4f1;
+  --surface-1: #1c1b19;
+  --surface-2: #252422;
+  --surface-3: #2f2e2b;
+  --border: #33312d;
+  --muted-foreground: #9a9893;
+  --accent: #f07060;
+  --accent-foreground: #ffffff;
+  --destructive: #f87171;
+  --priority-low: #60a5fa;
+  --priority-medium: #fbbf24;
+  --priority-high: #f87171;
+  --memo-bg: #1a1917;
+  --memo-card: #242320;
+  --memo-card-border: #33312d;
+  --memo-tag: #8fbc8f;
+  --memo-foreground: #e8e6e1;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-priority-low: var(--priority-low);
+  --color-priority-medium: var(--priority-medium);
+  --color-priority-high: var(--priority-high);
+  --color-memo-bg: var(--memo-bg);
+  --color-memo-card: var(--memo-card);
+  --color-memo-card-border: var(--memo-card-border);
+  --color-memo-tag: var(--memo-tag);
+  --color-memo-foreground: var(--memo-foreground);
+  --font-sans: var(--font-geist-sans);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+}
+
+body {
+  height: 100%;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--surface-3);
+  border-radius: 3px;
+}

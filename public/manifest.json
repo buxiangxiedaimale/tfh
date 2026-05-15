@@ -1,0 +1,19 @@
+{
+  "name": "FlowTodo",
+  "short_name": "FlowTodo",
+  "description": "智能待办 — 跨端任务管理",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f7f4",
+  "theme_color": "#e85d4c",
+  "orientation": "portrait-primary",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

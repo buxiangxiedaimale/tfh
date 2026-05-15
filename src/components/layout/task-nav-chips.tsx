@@ -1,0 +1,78 @@
+"use client";
+
+import {
+  Calendar,
+  CalendarDays,
+  CheckCircle2,
+  Inbox,
+  LayoutList,
+  MoreHorizontal,
+  Sun,
+} from "lucide-react";
+import { getAppMode } from "@/lib/app-mode";
+import { cn } from "@/lib/utils";
+import { useTodoStore } from "@/store/todo-store";
+import type { ViewId } from "@/types";
+
+const chips: { id: ViewId; label: string; icon: typeof Inbox }[] = [
+  { id: "today", label: "今天", icon: Sun },
+  { id: "inbox", label: "收集箱", icon: Inbox },
+  { id: "upcoming", label: "即将", icon: CalendarDays },
+  { id: "calendar", label: "日历", icon: Calendar },
+  { id: "all", label: "全部", icon: LayoutList },
+  { id: "completed", label: "完成", icon: CheckCircle2 },
+];
+
+export function TaskNavChips() {
+  const { activeView, setActiveView, setSidebarOpen, getTaskCount } =
+    useTodoStore();
+
+  if (getAppMode(activeView) !== "tasks") return null;
+  if (activeView.startsWith("project:")) return null;
+
+  return (
+    <div className="shrink-0 border-b border-border lg:hidden">
+      <div className="flex gap-1 overflow-x-auto px-3 py-2 scrollbar-thin">
+        {chips.map(({ id, label, icon: Icon }) => {
+          const active = activeView === id;
+          const count = getTaskCount(id);
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveView(id)}
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors",
+                active
+                  ? "bg-accent text-accent-foreground"
+                  : "bg-surface-2 text-muted-foreground"
+              )}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+              {count > 0 && id !== "completed" ? (
+                <span
+                  className={cn(
+                    "min-w-[18px] rounded-full px-1 text-center text-[10px]",
+                    active ? "bg-accent-foreground/20" : "bg-surface-3"
+                  )}
+                >
+                  {count}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          className="flex shrink-0 items-center gap-1 rounded-full bg-surface-2 px-3 py-1.5 text-sm text-muted-foreground"
+          aria-label="更多列表与项目"
+        >
+          <MoreHorizontal className="h-4 w-4" />
+          更多
+        </button>
+      </div>
+    </div>
+  );
+}
