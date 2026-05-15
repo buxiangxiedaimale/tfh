@@ -5,6 +5,11 @@ import { Loader2, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { parseTaskWithAI } from "@/lib/ai/parse-task";
+import {
+  getViewTaskDefaults,
+  resolveProjectId,
+  taskFromPlainText,
+} from "@/lib/tasks/quick-create";
 import { useTodoStore } from "@/store/todo-store";
 import type { Priority } from "@/types";
 import { PRIORITY_LABELS } from "@/types";
@@ -34,26 +39,20 @@ export function QuickAdd() {
 
   if (!quickAddOpen) return null;
 
-  const defaultProjectId = activeView.startsWith("project:")
-    ? activeView.slice(8)
-    : undefined;
+  const { projectId: defaultProjectId, dueDate: viewDueDate } =
+    getViewTaskDefaults(activeView);
 
-  const resolveProjectId = (name?: string) => {
-    if (!name) return projectId || defaultProjectId;
-    const found = projects.find(
-      (p) => p.name.toLowerCase() === name.toLowerCase()
-    );
-    return found?.id ?? (projectId || defaultProjectId);
-  };
+  const resolveProject = (name?: string) =>
+    resolveProjectId(projects, name, projectId || defaultProjectId);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = title.trim();
     if (!trimmed) return;
     addTask({
-      title: trimmed,
+      ...taskFromPlainText(trimmed, activeView),
       dueDate:
-        dueDate || (activeView === "today" ? toDateInputValue() : undefined),
+        dueDate || viewDueDate || (activeView === "today" ? toDateInputValue() : undefined),
       priority,
       projectId: projectId || defaultProjectId,
     });
@@ -77,7 +76,7 @@ export function QuickAdd() {
     setTitle(data.title);
     if (data.dueDate) setDueDate(data.dueDate);
     if (data.priority) setPriority(data.priority);
-    const pid = resolveProjectId(data.projectName);
+    const pid = resolveProject(data.projectName);
     if (pid) setProjectId(pid);
     setAiMode(true);
   };

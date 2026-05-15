@@ -80,7 +80,7 @@ export function TaskList() {
             </div>
             <p className="text-lg font-medium">暂无任务</p>
             <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-              在上方输入后按 Enter；设置日期等请点右上角 +
+              在上方输入后点「添加」；设置日期等请点右上角 +
             </p>
           </div>
         ) : (
