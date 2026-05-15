@@ -1,5 +1,9 @@
 import type { RebangHotItem } from "@/lib/rebang/types";
-import { fetchHotItems, fetchMenuTabs } from "@/lib/rebang/api";
+import {
+  fetchHotItems,
+  fetchMenuTabs,
+  REBANG_UNSUPPORTED_HINT,
+} from "@/lib/rebang/api";
 import { rerankWithDeepSeek, type RerankCandidate } from "./deepseek-rerank";
 import { getEmbedding } from "./embedding";
 import { clampScore, cosineSimilarity } from "./similarity";
@@ -20,6 +24,8 @@ import { nanoid } from "nanoid";
 export interface HotCandidateInput extends RebangHotItem {
   source?: string;
 }
+
+const MAX_PAGES_PER_TAB = 5;
 
 function itemText(item: HotCandidateInput) {
   return normalizeText(item.title, item.describe, item.source, item.heat_str);
@@ -44,21 +50,28 @@ function effectiveWeight(interest: InterestItem) {
 
 export async function collectGlobalHotCandidates(): Promise<HotCandidateInput[]> {
   const { homeTabs } = await fetchMenuTabs();
-  const tabs = homeTabs.filter((tab) => tab.key !== "top");
+  const tabs = homeTabs.filter(
+    (tab) => tab.key !== "top" && !REBANG_UNSUPPORTED_HINT[tab.key]
+  );
   const batches: HotCandidateInput[] = [];
 
   for (const tab of tabs) {
-    try {
-      const data = await fetchHotItems(tab.key, { page: 1, tabMeta: tab });
-      batches.push(
-        ...data.list.slice(0, 20).map((item) => ({
-          ...item,
-          item_key: `${tab.key}:${item.item_key}`,
-          source: tab.name,
-        }))
-      );
-    } catch (error) {
-      console.warn(`Skip hot tab ${tab.key}`, error);
+    for (let page = 1; page <= MAX_PAGES_PER_TAB; page += 1) {
+      try {
+        const data = await fetchHotItems(tab.key, { page, tabMeta: tab });
+        if (!data.list.length) break;
+        batches.push(
+          ...data.list.map((item) => ({
+            ...item,
+            item_key: `${tab.key}:${page}:${item.item_key}`,
+            source: tab.name,
+          }))
+        );
+        if (data.current_page >= data.total_page) break;
+      } catch {
+        // 部分平台或分页偶发不可用，推荐候选池直接跳过，避免污染 PM2 error 日志。
+        break;
+      }
     }
   }
 

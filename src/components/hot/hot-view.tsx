@@ -67,6 +67,7 @@ export function HotView() {
   const [interestProfile, setInterestProfile] = useState<InterestProfile | null>(null);
   const [recommendationMode, setRecommendationMode] = useState(false);
   const [recommending, setRecommending] = useState(false);
+  const [recommendationProgress, setRecommendationProgress] = useState("");
   const [feedbackKeys, setFeedbackKeys] = useState<Record<string, InterestKind>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -187,21 +188,34 @@ export function HotView() {
   const generateRecommendations = useCallback(async () => {
     if (recommending) return;
     setRecommending(true);
+    setRecommendationMode(true);
+    setRecommendations([]);
+    setRecommendationProgress("正在抓取全平台热榜...");
     setError(null);
     try {
+      const progressTimer = window.setTimeout(() => {
+        setRecommendationProgress("正在生成向量并匹配你的兴趣...");
+      }, 2500);
+      const rerankTimer = window.setTimeout(() => {
+        setRecommendationProgress("正在让 AI 重排 Top 20...");
+      }, 8000);
       const res = await fetch("/api/recommendations/hot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: "global" }),
       });
+      window.clearTimeout(progressTimer);
+      window.clearTimeout(rerankTimer);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "推荐失败");
       setRecommendations(json.recommendations ?? []);
       setRecommendedItems(json.items ?? []);
       setInterestProfile(json.profile ?? null);
       setRecommendationMode(true);
+      setRecommendationProgress("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "推荐失败");
+      setRecommendationProgress("");
     } finally {
       setRecommending(false);
     }
@@ -395,14 +409,24 @@ export function HotView() {
                 )}
               </li>
             ) : null}
+            {recommendationMode && recommending ? (
+              <li className="rounded-2xl border border-dashed border-accent/30 bg-accent/5 p-6 text-center text-sm text-muted-foreground">
+                <Sparkles className="mx-auto mb-2 h-5 w-5 animate-pulse text-accent" />
+                <p className="font-medium text-foreground">正在生成全局推荐</p>
+                <p className="mt-1">{recommendationProgress || "正在计算..."}</p>
+              </li>
+            ) : null}
             {recommendationMode && recommendations.length === 0 ? (
               <li className="rounded-2xl border border-dashed border-border bg-surface-1 p-6 text-center text-sm text-muted-foreground">
-                还没有足够的兴趣样本。先在热榜里点几条「感兴趣」，我就能开始学习。
+                {recommending
+                  ? "请稍等，我正在汇总多平台热榜。"
+                  : "还没有足够的兴趣样本。先在热榜里点几条「感兴趣」，我就能开始学习。"}
               </li>
             ) : null}
             {visibleItems.map((item, index) => {
               const rec = recommendationMap.get(item.item_key);
               const feedback = feedbackKeys[item.item_key];
+              const itemSource = itemSourceMap.get(item.item_key) ?? sourceName;
               return (
                 <li
                   key={item.item_key}
@@ -423,6 +447,9 @@ export function HotView() {
                           {item.title}
                         </a>
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-muted-foreground">
+                            {itemSource}
+                          </span>
                           {item.heat_str ? (
                             <span className="text-orange-500/90">{item.heat_str}</span>
                           ) : null}
