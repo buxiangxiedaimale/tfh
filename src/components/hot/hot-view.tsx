@@ -5,13 +5,41 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { RebangHotItem, RebangTab } from "@/lib/rebang/types";
-import { itemImageUrl, tabIconUrl } from "@/lib/rebang/api";
+import {
+  itemImageUrl,
+  LEAF_TAB_DEFAULT_SUB,
+  tabIconUrl,
+} from "@/lib/rebang/api";
 import { useTodoStore } from "@/store/todo-store";
+
+function TabIcon({ tab }: { tab: RebangTab }) {
+  const [failed, setFailed] = useState(false);
+  const src = tabIconUrl(tab);
+
+  if (!src || failed) {
+    return (
+      <span className="flex h-3 w-3 shrink-0 items-center justify-center rounded-sm bg-accent/80 text-[8px] font-bold text-white">
+        {tab.name.slice(0, 1)}
+      </span>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt=""
+      className="h-3 w-3 shrink-0 rounded-sm object-cover"
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 const TOP_SUB_TABS = [
   { key: "today", label: "今日" },
-  { key: "week", label: "本周" },
-  { key: "month", label: "本月" },
+  { key: "weekly", label: "本周" },
+  { key: "monthly", label: "本月" },
 ];
 
 export function HotView() {
@@ -75,6 +103,8 @@ export function HotView() {
           setActiveTab(current.key);
           if (current.key === "top") setSubTab("today");
           else if (current.child?.[0]) setSubTab(current.child[0].key);
+          else if (LEAF_TAB_DEFAULT_SUB[current.key])
+            setSubTab(LEAF_TAB_DEFAULT_SUB[current.key]);
         }
       })
       .catch(() => setError("无法加载热榜分类"));
@@ -92,6 +122,8 @@ export function HotView() {
       const defaultChild =
         tab.child.find((c) => c.current_show) ?? tab.child[0];
       setSubTab(defaultChild.key);
+    } else if (LEAF_TAB_DEFAULT_SUB[tab.key]) {
+      setSubTab(LEAF_TAB_DEFAULT_SUB[tab.key]);
     } else {
       setSubTab("");
     }
@@ -156,13 +188,7 @@ export function HotView() {
                     : "bg-surface-2 text-muted-foreground hover:text-foreground"
                 )}
               >
-                {tab.avatar ? (
-                  <img
-                    src={tabIconUrl(tab.avatar)}
-                    alt=""
-                    className="h-3 w-3 rounded-sm"
-                  />
-                ) : null}
+                {tab.avatar ? <TabIcon tab={tab} /> : null}
                 {tab.name}
               </button>
             ))}

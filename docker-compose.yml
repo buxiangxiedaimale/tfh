@@ -1,6 +1,10 @@
 services:
   flowtodo:
-    build: .
+    build:
+      context: .
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-docker.m.daocloud.io/library/node:20-alpine}
+    image: flowtodo:latest
     container_name: flowtodo
     restart: unless-stopped
     ports:
