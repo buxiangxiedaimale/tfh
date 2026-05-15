@@ -22,9 +22,22 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 echo "==> 拉取最新代码..."
-git fetch origin 2>/dev/null || true
-BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
-git pull origin "$BRANCH" --rebase 2>/dev/null || git pull origin "$BRANCH" || git pull
+# 与手动「git pull origin main」一致：不先 fetch、不用 rebase，避免无输出卡住
+GIT_BRANCH="${GIT_BRANCH:-main}"
+export GIT_TERMINAL_PROMPT="${GIT_TERMINAL_PROMPT:-1}"
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "ERROR: 当前目录不是 git 仓库"
+  exit 1
+fi
+CURRENT="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "$GIT_BRANCH")"
+if [ "$CURRENT" = "HEAD" ]; then
+  CURRENT="$GIT_BRANCH"
+fi
+echo "    分支: $CURRENT (远程 origin/$GIT_BRANCH)"
+if ! git pull origin "$GIT_BRANCH" --no-rebase --progress; then
+  echo "WARN: pull origin/$GIT_BRANCH 失败，尝试 pull origin/$CURRENT ..."
+  git pull origin "$CURRENT" --no-rebase --progress
+fi
 
 if [ ! -f .env.local ] && [ -f .env.example ]; then
   cp .env.example .env.local
