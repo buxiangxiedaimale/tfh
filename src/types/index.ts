@@ -100,6 +100,22 @@ export interface HotRecommendation {
   matchedInterests: string[];
 }
 
+export interface InterestCluster {
+  name: string;
+  score: number;
+  keywords: string[];
+  examples: string[];
+}
+
+export interface InterestProfile {
+  total: number;
+  positive: number;
+  negative: number;
+  readLater: number;
+  clusters: InterestCluster[];
+  updatedAt: string | null;
+}
+
 export const BOARD_COLUMNS: {
   id: BoardStatus;
   label: string;

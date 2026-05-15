@@ -22,7 +22,7 @@ const SYSTEM_PROMPT = `你是用户的私人信息推荐助手。
 - score 为 0 到 1。
 - 推荐理由必须结合用户兴趣，不要泛泛而谈。
 - 如果候选与负反馈明显相似，降低分数。
-- 最多返回 12 条。`;
+- 最多返回 20 条。`;
 
 export async function rerankWithDeepSeek(
   interests: InterestItem[],
@@ -55,7 +55,7 @@ export async function rerankWithDeepSeek(
           role: "user",
           content: JSON.stringify({
             interests: interestContext,
-            candidates: candidates.slice(0, 24),
+            candidates: candidates.slice(0, 30),
           }),
         },
       ],

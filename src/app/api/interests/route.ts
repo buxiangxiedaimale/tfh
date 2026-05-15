@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { addInterestFeedback } from "@/lib/recommendation/hot-recommend";
+import {
+  addInterestFeedback,
+  buildInterestProfile,
+} from "@/lib/recommendation/hot-recommend";
 import { readInterests } from "@/lib/server-data/interest-store";
 import type { InterestKind } from "@/types";
 
@@ -7,7 +10,10 @@ export const runtime = "nodejs";
 
 export async function GET() {
   const interests = await readInterests();
-  return NextResponse.json({ interests });
+  return NextResponse.json({
+    interests,
+    profile: buildInterestProfile(interests),
+  });
 }
 
 export async function POST(request: Request) {

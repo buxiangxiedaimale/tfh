@@ -5,6 +5,7 @@ import {
   Flame,
   Heart,
   ListPlus,
+  Bookmark,
   RefreshCw,
   Sparkles,
   ThumbsDown,
@@ -19,7 +20,11 @@ import {
   tabIconUrl,
 } from "@/lib/rebang/api";
 import { useTodoStore } from "@/store/todo-store";
-import type { HotRecommendation, InterestKind } from "@/types";
+import type {
+  HotRecommendation,
+  InterestKind,
+  InterestProfile,
+} from "@/types";
 
 function TabIcon({ tab }: { tab: RebangTab }) {
   const [failed, setFailed] = useState(false);
@@ -58,6 +63,8 @@ export function HotView() {
   const [subTab, setSubTab] = useState("today");
   const [items, setItems] = useState<RebangHotItem[]>([]);
   const [recommendations, setRecommendations] = useState<HotRecommendation[]>([]);
+  const [recommendedItems, setRecommendedItems] = useState<RebangHotItem[]>([]);
+  const [interestProfile, setInterestProfile] = useState<InterestProfile | null>(null);
   const [recommendationMode, setRecommendationMode] = useState(false);
   const [recommending, setRecommending] = useState(false);
   const [feedbackKeys, setFeedbackKeys] = useState<Record<string, InterestKind>>({});
@@ -69,6 +76,15 @@ export function HotView() {
     () => tabs.find((t) => t.key === activeTab),
     [tabs, activeTab]
   );
+
+  const itemSourceMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of recommendedItems) {
+      const source = "source" in item ? String(item.source ?? "") : "";
+      if (source) map.set(item.item_key, source);
+    }
+    return map;
+  }, [recommendedItems]);
 
   const subTabs = useMemo(() => {
     if (activeTab === "top") return TOP_SUB_TABS;
@@ -154,15 +170,6 @@ export function HotView() {
 
   const sourceName = currentTab?.name ?? activeTab;
 
-  const itemsWithSource = useMemo(
-    () =>
-      items.map((item) => ({
-        ...item,
-        source: sourceName,
-      })),
-    [items, sourceName]
-  );
-
   const recommendationMap = useMemo(
     () => new Map(recommendations.map((item) => [item.itemKey, item])),
     [recommendations]
@@ -170,34 +177,46 @@ export function HotView() {
 
   const visibleItems = useMemo(() => {
     if (!recommendationMode) return items;
-    const itemMap = new Map(items.map((item) => [item.item_key, item]));
+    const sourceItems = recommendedItems.length ? recommendedItems : items;
+    const itemMap = new Map(sourceItems.map((item) => [item.item_key, item]));
     return recommendations
       .map((rec) => itemMap.get(rec.itemKey))
       .filter(Boolean) as RebangHotItem[];
-  }, [items, recommendationMode, recommendations]);
+  }, [items, recommendedItems, recommendationMode, recommendations]);
 
-  const generateRecommendations = async () => {
-    if (!items.length || recommending) return;
+  const generateRecommendations = useCallback(async () => {
+    if (recommending) return;
     setRecommending(true);
     setError(null);
     try {
       const res = await fetch("/api/recommendations/hot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: itemsWithSource }),
+        body: JSON.stringify({ mode: "global" }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "推荐失败");
       setRecommendations(json.recommendations ?? []);
+      setRecommendedItems(json.items ?? []);
+      setInterestProfile(json.profile ?? null);
       setRecommendationMode(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "推荐失败");
     } finally {
       setRecommending(false);
     }
-  };
+  }, [recommending]);
+
+  useEffect(() => {
+    if (!recommendationMode) return;
+    const timer = setInterval(() => {
+      void generateRecommendations();
+    }, 10 * 60 * 1000);
+    return () => clearInterval(timer);
+  }, [generateRecommendations, recommendationMode]);
 
   const sendFeedback = async (item: RebangHotItem, kind: InterestKind) => {
+    const source = itemSourceMap.get(item.item_key) ?? sourceName;
     setFeedbackKeys((prev) => ({ ...prev, [item.item_key]: kind }));
     try {
       const res = await fetch("/api/interests", {
@@ -207,7 +226,7 @@ export function HotView() {
           kind,
           item: {
             ...item,
-            source: sourceName,
+            source,
           },
         }),
       });
@@ -261,7 +280,7 @@ export function HotView() {
           <Button
             size="sm"
             onClick={generateRecommendations}
-            disabled={recommending || items.length === 0}
+            disabled={recommending}
             className="gap-1.5"
           >
             <Sparkles className={cn("h-4 w-4", recommending && "animate-pulse")} />
@@ -275,7 +294,7 @@ export function HotView() {
           <button
             type="button"
             onClick={generateRecommendations}
-            disabled={recommending || items.length === 0}
+            disabled={recommending}
             className={cn(
               "flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] transition-colors",
               recommendationMode
@@ -350,6 +369,32 @@ export function HotView() {
           </div>
         ) : (
           <ul className="mx-auto max-w-3xl space-y-2">
+            {recommendationMode && interestProfile ? (
+              <li className="rounded-2xl border border-accent/20 bg-accent/5 p-3 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2 font-medium text-foreground">
+                  <Sparkles className="h-4 w-4 text-accent" />
+                  兴趣画像
+                  <span className="ml-auto text-muted-foreground">
+                    样本 {interestProfile.total} · 稍后看 {interestProfile.readLater}
+                  </span>
+                </div>
+                {interestProfile.clusters.length ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {interestProfile.clusters.slice(0, 8).map((cluster) => (
+                      <span
+                        key={cluster.name}
+                        className="rounded-full bg-surface-1 px-2 py-1"
+                        title={cluster.examples.join(" / ")}
+                      >
+                        {cluster.name}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2">继续点击感兴趣，我会自动识别你的关注方向。</p>
+                )}
+              </li>
+            ) : null}
             {recommendationMode && recommendations.length === 0 ? (
               <li className="rounded-2xl border border-dashed border-border bg-surface-1 p-6 text-center text-sm text-muted-foreground">
                 还没有足够的兴趣样本。先在热榜里点几条「感兴趣」，我就能开始学习。
@@ -412,6 +457,18 @@ export function HotView() {
                           onClick={() => sendFeedback(item, "negative")}
                         >
                           <ThumbsDown className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn(
+                            "h-7 w-7",
+                            feedback === "read_later" && "bg-accent/10 text-accent"
+                          )}
+                          title="稍后看"
+                          onClick={() => sendFeedback(item, "read_later")}
+                        >
+                          <Bookmark className="h-3.5 w-3.5" />
                         </Button>
                         <Button
                           variant="ghost"

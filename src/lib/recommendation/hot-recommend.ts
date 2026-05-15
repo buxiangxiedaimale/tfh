@@ -1,4 +1,5 @@
 import type { RebangHotItem } from "@/lib/rebang/types";
+import { fetchHotItems, fetchMenuTabs } from "@/lib/rebang/api";
 import { rerankWithDeepSeek, type RerankCandidate } from "./deepseek-rerank";
 import { getEmbedding } from "./embedding";
 import { clampScore, cosineSimilarity } from "./similarity";
@@ -8,7 +9,12 @@ import {
   readInterests,
   writeInterests,
 } from "@/lib/server-data/interest-store";
-import type { HotRecommendation, InterestItem, InterestKind } from "@/types";
+import type {
+  HotRecommendation,
+  InterestItem,
+  InterestKind,
+  InterestProfile,
+} from "@/types";
 import { nanoid } from "nanoid";
 
 export interface HotCandidateInput extends RebangHotItem {
@@ -26,6 +32,94 @@ function heatScore(heat?: string) {
   const raw = Number(match[1]);
   const multiplier = heat.includes("万") ? 10000 : 1;
   return Math.min(1, Math.log10(raw * multiplier + 1) / 7);
+}
+
+function effectiveWeight(interest: InterestItem) {
+  const days =
+    (Date.now() - new Date(interest.updatedAt).getTime()) / 86400000;
+  const halfLifeDays = interest.kind === "negative" ? 120 : 90;
+  const decay = Math.pow(0.5, Math.max(0, days) / halfLifeDays);
+  return interest.weight * decay;
+}
+
+export async function collectGlobalHotCandidates(): Promise<HotCandidateInput[]> {
+  const { homeTabs } = await fetchMenuTabs();
+  const tabs = homeTabs.filter((tab) => tab.key !== "top");
+  const batches: HotCandidateInput[] = [];
+
+  for (const tab of tabs) {
+    try {
+      const data = await fetchHotItems(tab.key, { page: 1, tabMeta: tab });
+      batches.push(
+        ...data.list.slice(0, 20).map((item) => ({
+          ...item,
+          item_key: `${tab.key}:${item.item_key}`,
+          source: tab.name,
+        }))
+      );
+    } catch (error) {
+      console.warn(`Skip hot tab ${tab.key}`, error);
+    }
+  }
+
+  const seen = new Set<string>();
+  return batches.filter((item) => {
+    const key = item.www_url || item.item_key;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function buildInterestProfile(interests: InterestItem[]): InterestProfile {
+  const keywordMap = new Map<
+    string,
+    { score: number; examples: Set<string>; keywords: Set<string> }
+  >();
+  const positiveKinds = new Set<InterestKind>(["positive", "read_later"]);
+
+  for (const item of interests) {
+    if (!positiveKinds.has(item.kind)) continue;
+    const weight = Math.max(0.05, effectiveWeight(item));
+    const keys = item.keywords.length ? item.keywords : fallbackKeywords(item.title);
+    for (const keyword of keys.slice(0, 6)) {
+      const normalized = keyword.trim();
+      if (!normalized) continue;
+      const group = keywordMap.get(normalized) ?? {
+        score: 0,
+        examples: new Set<string>(),
+        keywords: new Set<string>(),
+      };
+      group.score += weight;
+      group.examples.add(item.title);
+      group.keywords.add(normalized);
+      keywordMap.set(normalized, group);
+    }
+  }
+
+  const clusters = Array.from(keywordMap.entries())
+    .map(([name, data]) => ({
+      name,
+      score: Number(data.score.toFixed(2)),
+      keywords: Array.from(data.keywords).slice(0, 6),
+      examples: Array.from(data.examples).slice(0, 3),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 12);
+
+  const latest = interests
+    .map((item) => item.updatedAt)
+    .sort()
+    .at(-1);
+
+  return {
+    total: interests.length,
+    positive: interests.filter((i) => i.kind === "positive").length,
+    negative: interests.filter((i) => i.kind === "negative").length,
+    readLater: interests.filter((i) => i.kind === "read_later").length,
+    clusters,
+    updatedAt: latest ?? null,
+  };
 }
 
 export async function addInterestFeedback(
@@ -70,13 +164,14 @@ export async function recommendHotItems(items: HotCandidateInput[]) {
   const interests = await readInterests();
   const cache = await readEmbeddingCache();
   const scored: RerankCandidate[] = [];
+  const profile = buildInterestProfile(interests);
 
   const usableInterests = interests
     .filter((item) => item.embeddingKey && cache[item.embeddingKey])
     .sort((a, b) => {
       const aTime = new Date(a.updatedAt).getTime();
       const bTime = new Date(b.updatedAt).getTime();
-      return Math.abs(b.weight) - Math.abs(a.weight) || bTime - aTime;
+      return Math.abs(effectiveWeight(b)) - Math.abs(effectiveWeight(a)) || bTime - aTime;
     })
     .slice(0, 1000);
 
@@ -84,11 +179,12 @@ export async function recommendHotItems(items: HotCandidateInput[]) {
     return {
       recommendations: [] as HotRecommendation[],
       interestCount: interests.length,
+      profile,
       configured: Boolean(process.env.SILICONFLOW_API_KEY),
     };
   }
 
-  for (const item of items.slice(0, 120)) {
+  for (const item of items.slice(0, 320)) {
     const text = itemText(item);
     const { embedding } = await getEmbedding(text);
     let positiveScore = 0;
@@ -99,8 +195,9 @@ export async function recommendHotItems(items: HotCandidateInput[]) {
       const interestEmbedding = cache[interest.embeddingKey!];
       if (!interestEmbedding) continue;
       const similarity = cosineSimilarity(embedding, interestEmbedding);
-      const weighted = similarity * Math.min(3, Math.abs(interest.weight));
-      if (interest.weight >= 0) {
+      const weight = effectiveWeight(interest);
+      const weighted = similarity * Math.min(3, Math.abs(weight));
+      if (weight >= 0) {
         if (weighted > positiveScore) positiveScore = weighted;
         if (similarity > 0.45) matched.set(interest.title, similarity);
       } else {
@@ -126,9 +223,9 @@ export async function recommendHotItems(items: HotCandidateInput[]) {
     });
   }
 
-  const candidates = scored.sort((a, b) => b.baseScore - a.baseScore).slice(0, 24);
+  const candidates = scored.sort((a, b) => b.baseScore - a.baseScore).slice(0, 30);
   const reranked = await rerankWithDeepSeek(interests, candidates);
-  const fallback = candidates.slice(0, 12).map((item) => ({
+  const fallback = candidates.slice(0, 20).map((item) => ({
     itemKey: item.itemKey,
     score: Number(item.baseScore.toFixed(3)),
     reason: item.matchedInterests.length
@@ -140,8 +237,9 @@ export async function recommendHotItems(items: HotCandidateInput[]) {
   return {
     recommendations: (reranked?.length ? reranked : fallback).sort(
       (a, b) => b.score - a.score
-    ),
+    ).slice(0, 20),
     interestCount: interests.length,
+    profile,
     configured: Boolean(process.env.SILICONFLOW_API_KEY),
   };
 }
