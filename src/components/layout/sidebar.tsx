@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Inbox,
   LayoutList,
+  LogOut,
   Moon,
   Plus,
   Search,
@@ -204,6 +205,17 @@ export function Sidebar() {
             <Moon className="h-4 w-4" />
           )}
           {theme === "dark" ? "浅色模式" : "深色模式"}
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            await fetch("/api/auth/logout", { method: "POST" });
+            window.location.href = "/login";
+          }}
+          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+        >
+          <LogOut className="h-4 w-4" />
+          退出登录
         </button>
       </div>
     </aside>
