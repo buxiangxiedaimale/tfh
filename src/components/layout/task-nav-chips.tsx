@@ -1,9 +1,7 @@
 "use client";
 
 import {
-  Calendar,
   CalendarDays,
-  CheckCircle2,
   Inbox,
   LayoutList,
   MoreHorizontal,
@@ -18,9 +16,7 @@ const chips: { id: ViewId; label: string; icon: typeof Inbox }[] = [
   { id: "today", label: "今天", icon: Sun },
   { id: "inbox", label: "收集箱", icon: Inbox },
   { id: "upcoming", label: "即将", icon: CalendarDays },
-  { id: "calendar", label: "日历", icon: Calendar },
   { id: "all", label: "全部", icon: LayoutList },
-  { id: "completed", label: "完成", icon: CheckCircle2 },
 ];
 
 export function TaskNavChips() {

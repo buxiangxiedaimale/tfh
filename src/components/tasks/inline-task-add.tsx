@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { parseTaskWithAI } from "@/lib/ai/parse-task";
+import { toDateInputValue } from "@/lib/dates";
 import {
   taskFromParsedIntent,
   taskFromPlainText,
@@ -33,7 +34,7 @@ export function InlineTaskAdd() {
   const addQuickTodayTask = (data: Parameters<typeof addTask>[0]) => {
     addTask({
       ...data,
-      dueDate: new Date().toISOString().slice(0, 10),
+      dueDate: toDateInputValue(),
     });
     setSelectedTaskId(null);
     setTitle("");

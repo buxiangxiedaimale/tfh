@@ -16,7 +16,11 @@ export async function pullSnapshot(
     .eq("workspace_id", workspaceId)
     .maybeSingle();
 
-  if (error || !data) return null;
+  if (error) {
+    console.error("Failed to pull sync snapshot", error);
+    return null;
+  }
+  if (!data) return null;
   return data.payload as SyncPayload;
 }
 
@@ -37,7 +41,11 @@ export async function pushSnapshot(
     { onConflict: "workspace_id" }
   );
 
-  return !error;
+  if (error) {
+    console.error("Failed to push sync snapshot", error);
+    return false;
+  }
+  return true;
 }
 
 export function subscribeSnapshot(
@@ -64,7 +72,9 @@ export function subscribeSnapshot(
         if (row?.payload) onRemote(row.payload);
       }
     )
-    .subscribe();
+    .subscribe((status, error) => {
+      if (error) console.error("Sync realtime subscription failed", status, error);
+    });
 
   return () => {
     supabase.removeChannel(channel);

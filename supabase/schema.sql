@@ -17,7 +17,12 @@ create policy "allow anon insert" on workspace_snapshots
   for insert with check (true);
 
 create policy "allow anon update" on workspace_snapshots
-  for update using (true);
+  for update using (true) with check (true);
 
 -- 启用 Realtime
-alter publication supabase_realtime add table workspace_snapshots;
+do $$
+begin
+  alter publication supabase_realtime add table workspace_snapshots;
+exception
+  when duplicate_object then null;
+end $$;

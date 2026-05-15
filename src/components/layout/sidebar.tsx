@@ -20,7 +20,6 @@ import { cn } from "@/lib/utils";
 import { useTodoStore } from "@/store/todo-store";
 import type { ViewId } from "@/types";
 import { PROJECT_COLORS } from "@/types";
-import { SyncPanel } from "@/components/sync/sync-panel";
 
 const mainNav: { id: ViewId; label: string; icon: typeof Inbox }[] = [
   { id: "inbox", label: "收集箱", icon: Inbox },
@@ -183,8 +182,6 @@ export function Sidebar() {
           );
         })}
       </nav>
-
-      <SyncPanel />
 
       <div className="space-y-2 border-t border-border/60 p-3">
         <Button className="w-full" onClick={() => setQuickAddOpen(true)}>

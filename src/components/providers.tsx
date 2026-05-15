@@ -2,7 +2,7 @@
 
 import { ThemeProvider } from "next-themes";
 import { useEffect } from "react";
-import { SyncProvider } from "@/components/sync/sync-provider";
+import { ServerDataProvider } from "@/components/server-data-provider";
 import { useTodoStore } from "@/store/todo-store";
 
 function KeyboardShortcuts() {
@@ -29,7 +29,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <KeyboardShortcuts />
-      <SyncProvider />
+      <ServerDataProvider />
       {children}
     </ThemeProvider>
   );

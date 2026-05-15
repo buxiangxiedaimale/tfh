@@ -1,4 +1,5 @@
 import type { ParsedTaskIntent } from "@/lib/ai/types";
+import { toDateInputValue } from "@/lib/dates";
 import type { Priority, Project, Task } from "@/types";
 
 export function getViewTaskDefaults(activeView: string) {
@@ -7,7 +8,7 @@ export function getViewTaskDefaults(activeView: string) {
     : undefined;
   const dueDate =
     activeView === "today"
-      ? new Date().toISOString().slice(0, 10)
+      ? toDateInputValue()
       : undefined;
   return { projectId, dueDate };
 }
