@@ -587,7 +587,14 @@ export const useTodoStore = create<TodoState>()(
           return tasks
             .filter((t) => matchesView(t, activeView))
             .filter((t) => matchesSearch(t, searchQuery))
-            .sort((a, b) => a.order - b.order);
+            .sort((a, b) => {
+              if (activeView === "completed") {
+                const bTime = new Date(b.completedAt ?? b.updatedAt).getTime();
+                const aTime = new Date(a.completedAt ?? a.updatedAt).getTime();
+                return bTime - aTime;
+              }
+              return a.order - b.order;
+            });
         },
 
         getTaskCount: (view) => {
