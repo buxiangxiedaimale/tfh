@@ -57,13 +57,13 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="flex h-full w-[280px] shrink-0 flex-col border-r border-border bg-surface-1">
-      <div className="flex items-center gap-2.5 px-4 py-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-accent-foreground shadow-sm">
+    <aside className="glass-panel flex h-full w-[280px] shrink-0 flex-col border-r border-border/60">
+      <div className="flex items-center gap-3 px-4 py-5">
+        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-indigo-400 text-white shadow-md">
           <CheckCircle2 className="h-5 w-5" />
         </div>
         <div>
-          <h1 className="text-lg font-bold tracking-tight">FlowTodo</h1>
+          <h1 className="text-lg font-semibold tracking-tight">FlowTodo</h1>
           <p className="text-xs text-muted-foreground">专注每一刻</p>
         </div>
       </div>
@@ -75,7 +75,7 @@ export function Sidebar() {
             placeholder="搜索任务..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-9 pl-9 bg-surface-2 border-transparent focus:border-border"
+            className="h-9 border-transparent bg-surface-2/80 pl-9 shadow-none focus:border-accent/30"
           />
         </div>
       </div>
@@ -93,10 +93,10 @@ export function Sidebar() {
               type="button"
               onClick={() => setActiveView(id)}
               className={cn(
-                "mb-0.5 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
+                "mb-0.5 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200",
                 active
-                  ? "bg-accent/12 text-accent font-medium"
-                  : "text-foreground/80 hover:bg-surface-2"
+                  ? "bg-accent-muted text-accent font-medium shadow-sm"
+                  : "text-foreground/80 hover:bg-surface-2/80"
               )}
             >
               <Icon
@@ -165,10 +165,10 @@ export function Sidebar() {
               type="button"
               onClick={() => setActiveView(viewId)}
               className={cn(
-                "mb-0.5 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
+                "mb-0.5 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200",
                 active
-                  ? "bg-accent/12 font-medium"
-                  : "text-foreground/80 hover:bg-surface-2"
+                  ? "bg-accent-muted font-medium text-accent shadow-sm"
+                  : "text-foreground/80 hover:bg-surface-2/80"
               )}
             >
               <span
@@ -186,7 +186,7 @@ export function Sidebar() {
 
       <SyncPanel />
 
-      <div className="border-t border-border p-3 space-y-2">
+      <div className="space-y-2 border-t border-border/60 p-3">
         <Button className="w-full" onClick={() => setQuickAddOpen(true)}>
           <Plus className="h-4 w-4" />
           新建任务

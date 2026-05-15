@@ -1,5 +1,6 @@
 "use client";
 
+import { CheckCircle2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -38,13 +39,18 @@ function LoginForm() {
   };
 
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-surface-1 p-8 shadow-lg">
-        <h1 className="text-center text-xl font-bold">FlowTodo</h1>
+    <div className="app-canvas flex min-h-[100dvh] items-center justify-center px-4">
+      <div className="elevated-md w-full max-w-sm rounded-3xl border border-border/60 bg-surface-1 p-8">
+        <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-indigo-400 text-white shadow-lg">
+          <CheckCircle2 className="h-7 w-7" />
+        </div>
+        <h1 className="text-center text-2xl font-semibold tracking-tight">
+          FlowTodo
+        </h1>
         <p className="mt-2 text-center text-sm text-muted-foreground">
-          请输入访问密码
+          请输入访问密码以继续
         </p>
-        <form onSubmit={submit} className="mt-6 space-y-4">
+        <form onSubmit={submit} className="mt-8 space-y-4">
           <Input
             type="password"
             placeholder="访问密码"
@@ -57,7 +63,7 @@ function LoginForm() {
             <p className="text-center text-sm text-destructive">{error}</p>
           ) : null}
           <Button type="submit" className="w-full" disabled={loading || !password}>
-            {loading ? "验证中…" : "进入"}
+            {loading ? "验证中…" : "进入应用"}
           </Button>
         </form>
       </div>
@@ -69,7 +75,7 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-[100dvh] items-center justify-center text-muted-foreground">
+        <div className="app-canvas flex min-h-[100dvh] items-center justify-center text-muted-foreground">
           加载中…
         </div>
       }

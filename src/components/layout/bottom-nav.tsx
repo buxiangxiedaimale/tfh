@@ -22,10 +22,10 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface-1/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 md:hidden"
       aria-label="主导航"
     >
-      <div className="flex h-14 items-stretch justify-around">
+      <div className="glass-panel elevated-md mx-auto flex h-[52px] max-w-sm items-stretch justify-around rounded-2xl border border-border/60 px-1">
         {tabs.map(({ mode, label, icon: Icon }) => {
           const active = current === mode;
           return (
@@ -34,12 +34,22 @@ export function BottomNav() {
               type="button"
               onClick={() => setAppMode(mode)}
               className={cn(
-                "flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] transition-colors",
+                "relative flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] transition-all duration-200",
                 active ? "text-accent" : "text-muted-foreground"
               )}
             >
-              <Icon className={cn("h-5 w-5", active && "stroke-[2.5]")} />
-              <span className={cn(active && "font-medium")}>{label}</span>
+              {active ? (
+                <span className="absolute inset-x-2 inset-y-1.5 rounded-lg bg-accent/10" />
+              ) : null}
+              <Icon
+                className={cn(
+                  "relative h-[18px] w-[18px]",
+                  active && "stroke-[2.5]"
+                )}
+              />
+              <span className={cn("relative", active && "font-semibold")}>
+                {label}
+              </span>
             </button>
           );
         })}

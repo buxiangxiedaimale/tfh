@@ -142,7 +142,7 @@ export function HotView() {
       <header className="hidden shrink-0 border-b border-border px-4 py-4 sm:px-8 md:block">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/15 text-orange-500">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/10 text-orange-500">
               <Flame className="h-5 w-5" />
             </div>
             <div>
@@ -242,7 +242,7 @@ export function HotView() {
             {items.map((item, index) => (
               <li
                 key={item.item_key}
-                className="group flex gap-3 rounded-xl border border-border bg-surface-1 p-3"
+                className="group elevated flex gap-3 rounded-2xl border border-border/60 bg-surface-1 p-3.5 transition-shadow hover:shadow-md"
               >
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-3 text-sm font-bold text-muted-foreground">
                   {index + 1}

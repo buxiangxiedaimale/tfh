@@ -88,9 +88,9 @@ export function QuickAdd() {
         className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm"
         onClick={() => setQuickAddOpen(false)}
       />
-      <div className="fixed left-1/2 top-[10%] z-[70] max-h-[85vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 overflow-y-auto rounded-2xl border border-border bg-surface-1 p-5 shadow-2xl">
+      <div className="fixed left-1/2 top-[10%] z-[70] max-h-[85vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 overflow-y-auto rounded-3xl border border-border/60 bg-surface-1 p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold">快速添加任务</h3>
+          <h3 className="text-lg font-semibold">详细添加任务</h3>
           <Button
             variant="ghost"
             size="icon"

@@ -1,45 +1,55 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8f7f4;
-  --foreground: #1a1a1a;
+  --background: #f4f6fb;
+  --foreground: #0f172a;
   --surface-1: #ffffff;
-  --surface-2: #f3f2ef;
-  --surface-3: #e8e6e1;
-  --border: #e5e2dc;
-  --muted-foreground: #6b6b6b;
-  --accent: #e85d4c;
+  --surface-2: #f1f5f9;
+  --surface-3: #e2e8f0;
+  --border: #e2e8f0;
+  --muted-foreground: #64748b;
+  --accent: #6366f1;
   --accent-foreground: #ffffff;
-  --destructive: #dc2626;
+  --accent-muted: #eef2ff;
+  --destructive: #ef4444;
   --priority-low: #3b82f6;
   --priority-medium: #f59e0b;
   --priority-high: #ef4444;
-  --memo-bg: #f5f3ef;
+  --memo-bg: #f8fafc;
   --memo-card: #ffffff;
-  --memo-card-border: #ebe8e2;
-  --memo-tag: #5c7c5c;
-  --memo-foreground: #2c2c2c;
+  --memo-card-border: #e2e8f0;
+  --memo-tag: #6366f1;
+  --memo-foreground: #0f172a;
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
+  --shadow-md: 0 4px 6px -1px rgb(15 23 42 / 0.06), 0 2px 4px -2px rgb(15 23 42 / 0.04);
+  --shadow-lg: 0 10px 15px -3px rgb(15 23 42 / 0.08), 0 4px 6px -4px rgb(15 23 42 / 0.04);
+  --radius-lg: 14px;
+  --radius-xl: 18px;
 }
 
 .dark {
-  --background: #121110;
-  --foreground: #f5f4f1;
-  --surface-1: #1c1b19;
-  --surface-2: #252422;
-  --surface-3: #2f2e2b;
-  --border: #33312d;
-  --muted-foreground: #9a9893;
-  --accent: #f07060;
+  --background: #0b0f1a;
+  --foreground: #f1f5f9;
+  --surface-1: #131825;
+  --surface-2: #1a2030;
+  --surface-3: #252d3d;
+  --border: #2a3344;
+  --muted-foreground: #94a3b8;
+  --accent: #818cf8;
   --accent-foreground: #ffffff;
+  --accent-muted: #1e1b4b;
   --destructive: #f87171;
   --priority-low: #60a5fa;
   --priority-medium: #fbbf24;
   --priority-high: #f87171;
-  --memo-bg: #1a1917;
-  --memo-card: #242320;
-  --memo-card-border: #33312d;
-  --memo-tag: #8fbc8f;
-  --memo-foreground: #e8e6e1;
+  --memo-bg: #0b0f1a;
+  --memo-card: #131825;
+  --memo-card-border: #2a3344;
+  --memo-tag: #818cf8;
+  --memo-foreground: #f1f5f9;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.2);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.25);
+  --shadow-lg: 0 12px 24px rgb(0 0 0 / 0.35);
 }
 
 @theme inline {
@@ -52,6 +62,7 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-accent-muted: var(--accent-muted);
   --color-destructive: var(--destructive);
   --color-priority-low: var(--priority-low);
   --color-priority-medium: var(--priority-medium);
@@ -77,13 +88,45 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  color: var(--foreground);
+}
+
+.app-canvas {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, color-mix(in srgb, var(--accent) 12%, transparent), transparent),
+    var(--background);
+}
+
+.glass-panel {
+  background: color-mix(in srgb, var(--surface-1) 88%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.elevated {
+  box-shadow: var(--shadow-sm);
+}
+
+.elevated-md {
+  box-shadow: var(--shadow-md);
 }
 
 .scrollbar-thin::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
   background: var(--surface-3);
-  border-radius: 3px;
+  border-radius: 999px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
 }

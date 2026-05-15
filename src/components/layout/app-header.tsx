@@ -39,7 +39,7 @@ export function AppHeader() {
   const showTaskActions = mode === "tasks";
 
   return (
-    <header className="flex items-center gap-2 border-b border-border px-3 py-2.5 lg:hidden">
+    <header className="glass-panel flex items-center gap-2 border-b border-border/60 px-3 py-2.5 lg:hidden">
       {showTaskActions ? (
         <Button
           variant="ghost"
@@ -54,7 +54,9 @@ export function AppHeader() {
         <span className="w-9 shrink-0" />
       )}
 
-      <h1 className="min-w-0 flex-1 truncate text-lg font-bold">{title}</h1>
+      <h1 className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight">
+        {title}
+      </h1>
 
       {showTaskActions ? (
         <div className="flex shrink-0 items-center gap-0.5">
@@ -66,7 +68,13 @@ export function AppHeader() {
           >
             <Search className="h-5 w-5" />
           </Button>
-          <Button size="icon" onClick={() => setQuickAddOpen(true)} aria-label="新建任务">
+          <Button
+            size="icon"
+            onClick={() => setQuickAddOpen(true)}
+            aria-label="详细添加任务（日期、优先级等）"
+            title="详细添加"
+            className="shadow-sm"
+          >
             <Plus className="h-5 w-5" />
           </Button>
         </div>

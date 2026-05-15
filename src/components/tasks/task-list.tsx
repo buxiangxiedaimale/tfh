@@ -64,23 +64,23 @@ export function TaskList() {
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden">
-      <header className="hidden shrink-0 border-b border-border px-4 py-5 sm:px-8 lg:block">
-        <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
+      <header className="hidden shrink-0 border-b border-border/60 px-4 py-6 sm:px-8 lg:block">
+        <h2 className="text-2xl font-semibold tracking-tight">{title}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {tasks.length} 个任务
         </p>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-2 py-4 sm:px-6">
+      <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-8">
         <InlineTaskAdd />
         {tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-2">
-              <ListTodo className="h-8 w-8 text-muted-foreground" />
+            <div className="elevated mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-1">
+              <ListTodo className="h-8 w-8 text-accent/60" />
             </div>
             <p className="text-lg font-medium">暂无任务</p>
             <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-              点击上方「添加任务」或按 Ctrl+K
+              在上方输入后按 Enter；设置日期等请点右上角 +
             </p>
           </div>
         ) : (

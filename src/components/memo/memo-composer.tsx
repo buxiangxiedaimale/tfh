@@ -19,9 +19,9 @@ export function MemoComposer() {
   };
 
   return (
-    <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 border-t border-memo-card-border bg-memo-bg/95 px-4 py-3 backdrop-blur-md md:bottom-0 md:left-[60px] md:pb-[env(safe-area-inset-bottom)]">
+    <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 px-4 py-3 md:bottom-0 md:left-[68px] md:pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto max-w-xl">
-        <div className="rounded-2xl border border-memo-card-border bg-memo-card p-3 shadow-lg focus-within:ring-2 focus-within:ring-memo-tag/30">
+        <div className="elevated-md rounded-2xl border border-memo-card-border/80 bg-memo-card p-3 focus-within:ring-2 focus-within:ring-accent/25">
           <textarea
             ref={ref}
             value={text}
@@ -42,7 +42,7 @@ export function MemoComposer() {
               size="sm"
               onClick={submit}
               disabled={!text.trim()}
-              className="gap-1 bg-memo-tag hover:bg-memo-tag/90"
+              className="gap-1 shadow-sm"
             >
               <Send className="h-3.5 w-3.5" />
               记录

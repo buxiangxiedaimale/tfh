@@ -5,18 +5,20 @@ import { forwardRef } from "react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
+  "inline-flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
   {
     variants: {
       variant: {
         default:
-          "bg-accent text-accent-foreground shadow-sm hover:bg-accent/90",
+          "bg-accent text-accent-foreground shadow-sm hover:brightness-110",
         secondary:
-          "bg-surface-2 text-foreground hover:bg-surface-3 border border-border",
-        ghost: "hover:bg-surface-2 text-muted-foreground hover:text-foreground",
-        danger: "bg-destructive/10 text-destructive hover:bg-destructive/20",
+          "bg-surface-2 text-foreground hover:bg-surface-3 border border-border/80",
+        ghost:
+          "hover:bg-surface-2 text-muted-foreground hover:text-foreground",
+        danger:
+          "bg-destructive/10 text-destructive hover:bg-destructive/15",
         outline:
-          "border border-border bg-transparent hover:bg-surface-2 text-foreground",
+          "border border-border bg-surface-1/50 hover:bg-surface-2 text-foreground",
       },
       size: {
         default: "h-10 px-4 py-2",

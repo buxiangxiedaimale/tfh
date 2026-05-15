@@ -42,15 +42,15 @@ export function TaskItem({ task }: TaskItemProps) {
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group flex items-start gap-2 rounded-xl border border-transparent px-2 py-2.5 transition-all",
-        selected && "border-accent/30 bg-accent/5",
-        !selected && "hover:bg-surface-2",
-        isDragging && "z-10 opacity-60 shadow-lg bg-surface-1"
+        "group elevated mb-2 flex items-start gap-2.5 rounded-2xl border border-border/50 bg-surface-1 px-3 py-3 transition-all duration-200",
+        selected && "border-accent/40 bg-accent-muted ring-1 ring-accent/20",
+        !selected && "hover:border-border hover:shadow-md",
+        isDragging && "z-10 scale-[1.01] opacity-90 shadow-lg"
       )}
     >
       <button
         type="button"
-        className="mt-0.5 cursor-grab touch-none text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+        className="mt-0.5 cursor-grab touch-none text-muted-foreground opacity-40 transition-opacity group-hover:opacity-100 active:cursor-grabbing md:opacity-0"
         {...attributes}
         {...listeners}
         aria-label="拖动排序"

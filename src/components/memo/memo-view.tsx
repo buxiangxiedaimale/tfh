@@ -46,7 +46,7 @@ export function MemoView() {
               className={cn(
                 "rounded-full px-3 py-1 text-xs transition-colors",
                 !memoTagFilter
-                  ? "bg-memo-tag text-white"
+                  ? "bg-accent text-accent-foreground shadow-sm"
                   : "bg-memo-card text-muted-foreground hover:bg-surface-2"
               )}
             >
@@ -60,8 +60,8 @@ export function MemoView() {
                 className={cn(
                   "rounded-full px-3 py-1 text-xs transition-colors",
                   memoTagFilter === name
-                    ? "bg-memo-tag text-white"
-                    : "bg-memo-card text-memo-tag hover:bg-memo-tag/10"
+                    ? "bg-accent text-accent-foreground shadow-sm"
+                    : "bg-memo-card text-muted-foreground hover:bg-surface-2"
                 )}
               >
                 #{name}

@@ -20,14 +20,14 @@ export function AppShell() {
   const showTaskDetail = selectedTaskId && tasksMode;
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-background">
+    <div className="app-canvas flex h-[100dvh] overflow-hidden">
       <ModeRail />
 
       {tasksMode ? (
         <>
           <div
             className={cn(
-              "fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:left-[60px] lg:static lg:translate-x-0",
+              "fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:left-[68px] lg:static lg:translate-x-0",
               sidebarOpen ? "translate-x-0" : "-translate-x-full"
             )}
           >
@@ -43,7 +43,7 @@ export function AppShell() {
         </>
       ) : null}
 
-      <main className="flex min-w-0 flex-1 flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
+      <main className="flex min-w-0 flex-1 flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
         <AppHeader />
         {tasksMode ? <TaskNavChips /> : null}
 
