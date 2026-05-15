@@ -1,6 +1,14 @@
 "use client";
 
-import { ExternalLink, Flame, ListPlus, RefreshCw } from "lucide-react";
+import {
+  ExternalLink,
+  Flame,
+  Heart,
+  ListPlus,
+  RefreshCw,
+  Sparkles,
+  ThumbsDown,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -11,6 +19,7 @@ import {
   tabIconUrl,
 } from "@/lib/rebang/api";
 import { useTodoStore } from "@/store/todo-store";
+import type { HotRecommendation, InterestKind } from "@/types";
 
 function TabIcon({ tab }: { tab: RebangTab }) {
   const [failed, setFailed] = useState(false);
@@ -48,6 +57,10 @@ export function HotView() {
   const [activeTab, setActiveTab] = useState("top");
   const [subTab, setSubTab] = useState("today");
   const [items, setItems] = useState<RebangHotItem[]>([]);
+  const [recommendations, setRecommendations] = useState<HotRecommendation[]>([]);
+  const [recommendationMode, setRecommendationMode] = useState(false);
+  const [recommending, setRecommending] = useState(false);
+  const [feedbackKeys, setFeedbackKeys] = useState<Record<string, InterestKind>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +94,8 @@ export function HotView() {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "加载失败");
         setItems(json.data.list ?? []);
+        setRecommendations([]);
+        setRecommendationMode(false);
       } catch (e) {
         setError(e instanceof Error ? e.message : "加载失败");
         setItems([]);
@@ -137,6 +152,79 @@ export function HotView() {
     });
   };
 
+  const sourceName = currentTab?.name ?? activeTab;
+
+  const itemsWithSource = useMemo(
+    () =>
+      items.map((item) => ({
+        ...item,
+        source: sourceName,
+      })),
+    [items, sourceName]
+  );
+
+  const recommendationMap = useMemo(
+    () => new Map(recommendations.map((item) => [item.itemKey, item])),
+    [recommendations]
+  );
+
+  const visibleItems = useMemo(() => {
+    if (!recommendationMode) return items;
+    const itemMap = new Map(items.map((item) => [item.item_key, item]));
+    return recommendations
+      .map((rec) => itemMap.get(rec.itemKey))
+      .filter(Boolean) as RebangHotItem[];
+  }, [items, recommendationMode, recommendations]);
+
+  const generateRecommendations = async () => {
+    if (!items.length || recommending) return;
+    setRecommending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/recommendations/hot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: itemsWithSource }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "推荐失败");
+      setRecommendations(json.recommendations ?? []);
+      setRecommendationMode(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "推荐失败");
+    } finally {
+      setRecommending(false);
+    }
+  };
+
+  const sendFeedback = async (item: RebangHotItem, kind: InterestKind) => {
+    setFeedbackKeys((prev) => ({ ...prev, [item.item_key]: kind }));
+    try {
+      const res = await fetch("/api/interests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind,
+          item: {
+            ...item,
+            source: sourceName,
+          },
+        }),
+      });
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.error ?? "保存兴趣失败");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "保存兴趣失败");
+      setFeedbackKeys((prev) => {
+        const next = { ...prev };
+        delete next[item.item_key];
+        return next;
+      });
+    }
+  };
+
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden bg-background">
       <header className="hidden shrink-0 border-b border-border px-4 py-4 sm:px-8 md:block">
@@ -170,11 +258,34 @@ export function HotView() {
             <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
             刷新
           </Button>
+          <Button
+            size="sm"
+            onClick={generateRecommendations}
+            disabled={recommending || items.length === 0}
+            className="gap-1.5"
+          >
+            <Sparkles className={cn("h-4 w-4", recommending && "animate-pulse")} />
+            推荐
+          </Button>
         </div>
       </header>
 
       <div className="shrink-0 border-b border-border">
         <div className="flex items-center gap-2 px-3 py-2 sm:px-6">
+          <button
+            type="button"
+            onClick={generateRecommendations}
+            disabled={recommending || items.length === 0}
+            className={cn(
+              "flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] transition-colors",
+              recommendationMode
+                ? "bg-accent text-accent-foreground"
+                : "bg-surface-2 text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Sparkles className={cn("h-3.5 w-3.5", recommending && "animate-pulse")} />
+            推荐
+          </button>
           <div className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto scrollbar-thin">
             {tabs.map((tab) => (
               <button
@@ -239,53 +350,103 @@ export function HotView() {
           </div>
         ) : (
           <ul className="mx-auto max-w-3xl space-y-2">
-            {items.map((item, index) => (
-              <li
-                key={item.item_key}
-                className="group elevated flex gap-3 rounded-2xl border border-border/60 bg-surface-1 p-3.5 transition-shadow hover:shadow-md"
-              >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-3 text-sm font-bold text-muted-foreground">
-                  {index + 1}
-                </span>
-                <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <a
-                      href={item.www_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm font-medium leading-snug hover:text-accent"
-                    >
-                      {item.title}
-                    </a>
-                    {item.heat_str ? (
-                      <p className="mt-1 text-xs text-orange-500/90">
-                        {item.heat_str}
-                      </p>
+            {recommendationMode && recommendations.length === 0 ? (
+              <li className="rounded-2xl border border-dashed border-border bg-surface-1 p-6 text-center text-sm text-muted-foreground">
+                还没有足够的兴趣样本。先在热榜里点几条「感兴趣」，我就能开始学习。
+              </li>
+            ) : null}
+            {visibleItems.map((item, index) => {
+              const rec = recommendationMap.get(item.item_key);
+              const feedback = feedbackKeys[item.item_key];
+              return (
+                <li
+                  key={item.item_key}
+                  className="group elevated flex gap-3 rounded-2xl border border-border/60 bg-surface-1 p-3.5 transition-shadow hover:shadow-md"
+                >
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-3 text-sm font-bold text-muted-foreground">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <a
+                          href={item.www_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-medium leading-snug hover:text-accent"
+                        >
+                          {item.title}
+                        </a>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                          {item.heat_str ? (
+                            <span className="text-orange-500/90">{item.heat_str}</span>
+                          ) : null}
+                          {rec ? (
+                            <span className="rounded-full bg-accent/10 px-2 py-0.5 text-accent">
+                              推荐 {Math.round(rec.score * 100)}%
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 gap-0.5">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn(
+                            "h-7 w-7",
+                            feedback === "positive" && "bg-accent/10 text-accent"
+                          )}
+                          title="感兴趣"
+                          onClick={() => sendFeedback(item, "positive")}
+                        >
+                          <Heart className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn(
+                            "h-7 w-7",
+                            feedback === "negative" && "bg-destructive/10 text-destructive"
+                          )}
+                          title="不感兴趣"
+                          onClick={() => sendFeedback(item, "negative")}
+                        >
+                          <ThumbsDown className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="转为待办"
+                          onClick={() => saveAsTask(item)}
+                        >
+                          <ListPlus className="h-3.5 w-3.5" />
+                        </Button>
+                        <a
+                          href={item.www_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="打开原文"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-xl text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      </div>
+                    </div>
+                    {rec ? (
+                      <div className="mt-2 rounded-xl bg-accent/5 px-3 py-2 text-xs text-muted-foreground">
+                        <p className="text-foreground/80">{rec.reason}</p>
+                        {rec.matchedInterests.length ? (
+                          <p className="mt-1">
+                            匹配兴趣：{rec.matchedInterests.slice(0, 2).join("、")}
+                          </p>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
-                  <div className="flex shrink-0 gap-0.5">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      title="转为待办"
-                      onClick={() => saveAsTask(item)}
-                    >
-                      <ListPlus className="h-3.5 w-3.5" />
-                    </Button>
-                    <a
-                      href={item.www_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="打开原文"
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-xl text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
-                  </div>
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

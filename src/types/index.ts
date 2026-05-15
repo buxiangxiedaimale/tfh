@@ -77,6 +77,29 @@ export interface SyncPayload {
   version: number;
 }
 
+export type InterestKind = "positive" | "negative" | "read_later";
+
+export interface InterestItem {
+  id: string;
+  kind: InterestKind;
+  title: string;
+  url?: string;
+  source?: string;
+  heat?: string;
+  keywords: string[];
+  embeddingKey?: string;
+  weight: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HotRecommendation {
+  itemKey: string;
+  score: number;
+  reason: string;
+  matchedInterests: string[];
+}
+
 export const BOARD_COLUMNS: {
   id: BoardStatus;
   label: string;
