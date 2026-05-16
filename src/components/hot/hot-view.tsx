@@ -75,6 +75,14 @@ type HotRunInfo = {
   profile: InterestProfile | null;
 };
 
+const RECOMMEND_STEPS = [
+  { key: "fetch", label: "抓取候选" },
+  { key: "embed", label: "向量化" },
+  { key: "rank", label: "语义匹配" },
+  { key: "llm", label: "AI 精排" },
+  { key: "save", label: "整理结果" },
+];
+
 function formatRelative(iso?: string | null) {
   if (!iso) return "";
   const ts = new Date(iso).getTime();
@@ -97,7 +105,7 @@ export function HotView() {
   const [interestProfile, setInterestProfile] = useState<InterestProfile | null>(null);
   const [recommendationMode, setRecommendationMode] = useState(false);
   const [recommending, setRecommending] = useState(false);
-  const [recommendationProgress, setRecommendationProgress] = useState("");
+  const [activeStep, setActiveStep] = useState<number>(-1);
   const [feedbackKeys, setFeedbackKeys] = useState<Record<string, InterestKind>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -242,36 +250,46 @@ export function HotView() {
       if (recommending) return;
       setRecommending(true);
       setRecommendationMode(true);
-      setRecommendationProgress(
-        force ? "正在重新抓取知乎和微博..." : "正在读取最新推荐..."
-      );
+      setActiveStep(0);
       setError(null);
+
+      const timers: number[] = [];
+      const advance = (step: number, ms: number) => {
+        timers.push(
+          window.setTimeout(() => {
+            setActiveStep((curr) => (curr < step ? step : curr));
+          }, ms)
+        );
+      };
+      // 阶段进度以“预期耗时”推进，实际返回后会被清除并快进到完成
+      advance(1, 4000);
+      advance(2, 9000);
+      advance(3, 14000);
+      advance(4, 24000);
+
       try {
-        const progressTimer = window.setTimeout(() => {
-          setRecommendationProgress("正在生成向量并匹配你的兴趣...");
-        }, 2500);
-        const rerankTimer = window.setTimeout(() => {
-          setRecommendationProgress("正在让 AI 精选高匹配内容...");
-        }, 8000);
         const res = await fetch("/api/recommendations/hot", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ force }),
         });
-        window.clearTimeout(progressTimer);
-        window.clearTimeout(rerankTimer);
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "推荐失败");
+        // 计算完成，立即替换列表，进度条跳到完成状态
         applySnapshot(json);
-        setRecommendationMode(true);
-        setRecommendationProgress(
-          json.cooldown ? "最近已生成推荐，已读取最新结果" : ""
-        );
+        setActiveStep(RECOMMEND_STEPS.length);
       } catch (e) {
         setError(e instanceof Error ? e.message : "推荐失败");
-        setRecommendationProgress("");
+        setActiveStep(-1);
       } finally {
+        timers.forEach((id) => window.clearTimeout(id));
         setRecommending(false);
+        // 1.5 秒后隐藏进度条
+        window.setTimeout(() => {
+          setActiveStep((curr) =>
+            curr === RECOMMEND_STEPS.length ? -1 : curr
+          );
+        }, 1500);
       }
     },
     [recommending, applySnapshot]
@@ -343,15 +361,6 @@ export function HotView() {
             <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
             刷新
           </Button>
-          <Button
-            size="sm"
-            onClick={() => generateRecommendations(true)}
-            disabled={recommending}
-            className="gap-1.5"
-          >
-            <Sparkles className={cn("h-4 w-4", recommending && "animate-pulse")} />
-            推荐
-          </Button>
         </div>
       </header>
 
@@ -359,8 +368,7 @@ export function HotView() {
         <div className="flex items-center gap-2 px-3 py-2 sm:px-6">
           <button
             type="button"
-            onClick={() => generateRecommendations(true)}
-            disabled={recommending}
+            onClick={() => setRecommendationMode((v) => !v)}
             className={cn(
               "flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] transition-colors",
               recommendationMode
@@ -435,22 +443,82 @@ export function HotView() {
           </div>
         ) : (
           <ul className="mx-auto max-w-3xl space-y-2">
-            {recommendationMode && interestProfile ? (
+            {recommendationMode ? (
               <li className="rounded-2xl border border-accent/20 bg-accent/5 p-3 text-xs text-muted-foreground">
-                <div className="flex flex-wrap items-center gap-2 font-medium text-foreground">
-                  <Sparkles className="h-4 w-4 text-accent" />
-                  兴趣画像
+                <div className="flex flex-wrap items-center gap-2">
+                  <Sparkles
+                    className={cn(
+                      "h-4 w-4 text-accent",
+                      recommending && "animate-pulse"
+                    )}
+                  />
+                  <span className="font-medium text-foreground">个性化推荐</span>
                   {runInfo ? (
-                    <span className="text-[10px] font-normal text-muted-foreground">
-                      生成于 {formatRelative(runInfo.generatedAt)} · {runInfo.resultCount} 条 · 候选 {runInfo.candidateCount}
+                    <span className="text-[10px] text-muted-foreground">
+                      上次更新 {formatRelative(runInfo.generatedAt)} · {runInfo.resultCount} 条 · 候选 {runInfo.candidateCount}
                     </span>
                   ) : null}
-                  <span className="ml-auto text-muted-foreground">
-                    样本 {interestProfile.total} · 稍后看 {interestProfile.readLater}
-                  </span>
+                  {interestProfile ? (
+                    <span className="text-[10px] text-muted-foreground">
+                      样本 {interestProfile.total} · 稍后看 {interestProfile.readLater}
+                    </span>
+                  ) : null}
+                  <Button
+                    size="sm"
+                    className="ml-auto h-7 gap-1.5"
+                    onClick={() => generateRecommendations(true)}
+                    disabled={recommending}
+                  >
+                    <Sparkles
+                      className={cn(
+                        "h-3.5 w-3.5",
+                        recommending && "animate-pulse"
+                      )}
+                    />
+                    {recommending ? "生成中…" : "立即更新"}
+                  </Button>
                 </div>
-                {interestProfile.clusters.length ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                {activeStep >= 0 ? (
+                  <div className="mt-3 grid grid-cols-5 gap-1.5">
+                    {RECOMMEND_STEPS.map((step, i) => {
+                      const done =
+                        i < activeStep ||
+                        activeStep === RECOMMEND_STEPS.length;
+                      const current =
+                        i === activeStep &&
+                        activeStep < RECOMMEND_STEPS.length;
+                      return (
+                        <div
+                          key={step.key}
+                          className="flex flex-col items-stretch gap-1"
+                        >
+                          <div
+                            className={cn(
+                              "h-1 rounded-full transition-colors",
+                              done
+                                ? "bg-accent"
+                                : current
+                                ? "bg-accent/60 animate-pulse"
+                                : "bg-surface-2"
+                            )}
+                          />
+                          <span
+                            className={cn(
+                              "text-center text-[10px] transition-colors",
+                              done || current
+                                ? "text-foreground"
+                                : "text-muted-foreground"
+                            )}
+                          >
+                            {step.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+                {interestProfile && interestProfile.clusters.length ? (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
                     {interestProfile.clusters.slice(0, 8).map((cluster) => (
                       <span
                         key={cluster.name}
@@ -461,22 +529,13 @@ export function HotView() {
                       </span>
                     ))}
                   </div>
-                ) : (
-                  <p className="mt-2">继续点击感兴趣，我会自动识别你的关注方向。</p>
-                )}
+                ) : null}
               </li>
             ) : null}
-            {recommendationMode && recommending ? (
-              <li className="rounded-2xl border border-dashed border-accent/30 bg-accent/5 p-6 text-center text-sm text-muted-foreground">
-                <Sparkles className="mx-auto mb-2 h-5 w-5 animate-pulse text-accent" />
-                <p className="font-medium text-foreground">正在生成精准推荐</p>
-                <p className="mt-1">{recommendationProgress || "正在计算..."}</p>
-              </li>
-            ) : null}
-            {recommendationMode && recommendations.length === 0 ? (
+            {recommendationMode && recommendations.length === 0 && !recommending ? (
               <li className="rounded-2xl border border-dashed border-border bg-surface-1 p-6 text-center text-sm text-muted-foreground">
-                {recommending
-                  ? "请稍等，我正在汇总知乎和微博。"
+                {interestProfile && interestProfile.total > 0
+                  ? "还没有生成过推荐。点击右上「立即更新」试试。"
                   : "还没有足够的兴趣样本。先在热榜里点几条「感兴趣」，我就能开始学习。"}
               </li>
             ) : null}
