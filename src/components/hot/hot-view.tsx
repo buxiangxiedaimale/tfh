@@ -237,7 +237,13 @@ export function HotView() {
           tabs={tabs}
           isVisible={isVisible}
           isCustomized={isCustomized}
-          onToggle={(key) => toggle(key, allTabKeys)}
+          onToggle={(key) => {
+            toggle(key, allTabKeys);
+            if (key === activeTab && isVisible(activeTab)) {
+              const next = visibleTabs.find((t) => t.key !== key);
+              if (next) switchTab(next);
+            }
+          }}
           onSelectAll={() => selectAll(allTabKeys)}
           onReset={reset}
           onClose={() => setManageOpen(false)}
