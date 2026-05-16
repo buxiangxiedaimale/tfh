@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
-import {
-  addInterestFeedback,
-  buildInterestProfile,
-} from "@/lib/recommendation/hot-recommend";
+import { addInterestFeedback } from "@/lib/recommendation/hot-recommend";
 import { readInterests } from "@/lib/server-data/interest-store";
 import type { InterestKind } from "@/types";
 
@@ -10,10 +7,18 @@ export const runtime = "nodejs";
 
 export async function GET() {
   const interests = await readInterests();
-  return NextResponse.json({
-    interests,
-    profile: buildInterestProfile(interests),
-  });
+  const stats = {
+    total: interests.length,
+    positive: interests.filter((i) => i.kind === "positive").length,
+    negative: interests.filter((i) => i.kind === "negative").length,
+    readLater: interests.filter((i) => i.kind === "read_later").length,
+    updatedAt:
+      interests
+        .map((i) => i.updatedAt)
+        .sort()
+        .at(-1) ?? null,
+  };
+  return NextResponse.json({ interests, stats });
 }
 
 export async function POST(request: Request) {

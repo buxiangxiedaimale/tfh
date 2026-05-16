@@ -92,7 +92,52 @@ function applySchema(db: Database.Database) {
       last_recommended_at TEXT NOT NULL,
       times INTEGER NOT NULL DEFAULT 1
     );
+
+    -- LLM 生成的结构化用户画像（仅保留最新一条 active=1）
+    CREATE TABLE IF NOT EXISTS user_profiles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      content TEXT NOT NULL,
+      generated_at TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'llm',
+      interest_count INTEGER NOT NULL DEFAULT 0,
+      active INTEGER NOT NULL DEFAULT 1
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_profiles_active ON user_profiles(active);
+
+    -- 用户手动添加/删除的标签覆盖，跨画像重生成保留
+    CREATE TABLE IF NOT EXISTS profile_overrides (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tag_type TEXT NOT NULL,
+      tag_value TEXT NOT NULL,
+      operation TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE(tag_type, tag_value, operation)
+    );
+    CREATE INDEX IF NOT EXISTS idx_overrides_type ON profile_overrides(tag_type);
+
+    -- 推荐曝光追踪（疲劳抑制）
+    CREATE TABLE IF NOT EXISTS recommendation_exposures (
+      url TEXT PRIMARY KEY,
+      exposure_count INTEGER NOT NULL DEFAULT 0,
+      first_exposed_at TEXT NOT NULL,
+      last_exposed_at TEXT NOT NULL,
+      has_positive_feedback INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_exposures_last ON recommendation_exposures(last_exposed_at DESC);
   `);
+
+  // 给老的 recommendations 表添加新列（幂等）
+  const ensureColumn = (table: string, column: string, ddl: string) => {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+      name: string;
+    }>;
+    if (!cols.find((c) => c.name === column)) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+    }
+  };
+  ensureColumn("recommendations", "feature_scores", "TEXT");
+  ensureColumn("recommendations", "recall_channels", "TEXT");
+  ensureColumn("recommendations", "exploration", "INTEGER NOT NULL DEFAULT 0");
 }
 
 function tryMigrateInterestsJson(db: Database.Database) {

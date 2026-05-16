@@ -1,6 +1,71 @@
 # 热榜推荐系统部署与运维
 
-本文档描述新的推荐系统架构、部署步骤和阿里云 Linux 上的 cron 配置方法。
+本文档描述工业级推荐系统架构、部署步骤和阿里云 Linux 上的 cron 配置方法。
+
+## 推荐管线总览
+
+```
+[兴趣样本]  →  ensureUserProfile (LLM 结构化画像)
+                           ↓
+[候选池]   →  recallCandidates  (五通道并行召回)
+                           ↓
+              rankCandidates    (LLM 多维精排: domain/style/novelty/quality)
+                           ↓
+              applyRerank       (MMR 多样性 + 探索注入 + 同源约束)
+                           ↓
+              saveRun + bumpExposures
+```
+
+## 用户画像 (UserProfile)
+
+由 DeepSeek 基于兴趣样本生成的结构化画像：
+
+```ts
+{
+  identity: ["软件工程师", "AI 创业者"],
+  domains: [
+    { name: "AI/大模型", weight: 0.9, subtopics: ["DeepSeek", "Embedding"] }
+  ],
+  styles: ["深度技术解析", "上手教程"],
+  avoid: ["明星八卦"],
+  summary: "技术深度学习者，关注 AI 与工程实践",
+}
+```
+
+- **生成策略**：兴趣库每新增 ≥10 条样本自动触发 LLM 重算；用户可手动点「重新画像」强制更新。
+- **手动覆盖**：`profile_overrides` 表记录用户对每个标签的「添加 / 移除」动作，重新生成画像时不会丢失。
+- **API**：`GET/POST /api/profile`（详见下方接口约定）。
+
+## 多通道召回 (RecallChannel)
+
+| 通道 | 触发条件 |
+|---|---|
+| `domain` | 候选命中画像 domains 的关键词或与画像中心向量相似度高 |
+| `identity` | 候选命中 identity 标签 |
+| `style` | 候选命中 styles 关键词 |
+| `freshness` | 候选首次进入推荐池 < 24h |
+| `exploration` | 高热度（≥5万）但当前画像未命中 |
+
+命中 `avoid` 标签的候选硬过滤掉。
+
+## LLM 多维精排
+
+每条候选获得：
+
+- **domainMatch** 领域匹配 (0~1)
+- **styleMatch** 风格匹配 (0~1)
+- **novelty** 新颖度 (0~1)
+- **quality** 内容质量 (0~1)
+- **llmOverall** LLM 综合分 (0~1)
+- **baseScore** 粗排基础分（语义 + 召回信号）
+
+最终分 = 加权融合，叠加曝光疲劳衰减（已有正反馈的不衰减）。
+
+## MMR 重排 + 探索
+
+- **lambda 0.72**：相关性 vs 多样性平衡
+- **强制至少保留 2 条 exploration 候选**：扩展兴趣边界
+- **同源 cap**：避免单源刷屏（默认无上限，可配置）
 
 ## 架构概览
 

@@ -1,4 +1,9 @@
-import type { HotRecommendation, InterestProfile } from "@/types";
+import type {
+  FeatureScores,
+  HotRecommendation,
+  RecallChannel,
+  UserProfile,
+} from "@/types";
 import type { RebangHotItem } from "@/lib/rebang/types";
 import { getDb } from "./db";
 
@@ -8,6 +13,9 @@ export interface RecommendationRecord extends HotRecommendation {
   url?: string;
   baseScore?: number;
   llmScore?: number;
+  featureScores?: FeatureScores;
+  recallChannels?: RecallChannel[];
+  exploration?: boolean;
   firstRecommendedAt: string;
   lastRecommendedAt: string;
   item: RebangHotItem & { source?: string };
@@ -20,7 +28,7 @@ export interface RecommendationRun {
   candidateCount: number;
   resultCount: number;
   trigger: RunTrigger;
-  profile: InterestProfile | null;
+  profile: UserProfile | null;
   configured: boolean;
 }
 
@@ -29,7 +37,7 @@ export interface SaveRunInput {
   durationMs: number;
   candidateCount: number;
   trigger: RunTrigger;
-  profile: InterestProfile | null;
+  profile: UserProfile | null;
   configured: boolean;
   items: Array<{
     itemKey: string;
@@ -39,6 +47,9 @@ export interface SaveRunInput {
     matchedInterests: string[];
     baseScore?: number;
     llmScore?: number;
+    featureScores?: FeatureScores;
+    recallChannels?: RecallChannel[];
+    exploration?: boolean;
     item: RebangHotItem & { source?: string };
   }>;
 }
@@ -66,13 +77,16 @@ type RecRow = {
   first_recommended_at: string;
   last_recommended_at: string;
   item_snapshot: string;
+  feature_scores: string | null;
+  recall_channels: string | null;
+  exploration: number | null;
 };
 
 function rowToRun(row: RunRow): RecommendationRun {
-  let profile: InterestProfile | null = null;
+  let profile: UserProfile | null = null;
   if (row.profile) {
     try {
-      profile = JSON.parse(row.profile) as InterestProfile;
+      profile = JSON.parse(row.profile) as UserProfile;
     } catch {
       profile = null;
     }
@@ -108,6 +122,22 @@ function rowToRecord(row: RecRow): RecommendationRecord {
       www_url: row.url ?? "",
     } as RebangHotItem;
   }
+  let featureScores: FeatureScores | undefined;
+  if (row.feature_scores) {
+    try {
+      featureScores = JSON.parse(row.feature_scores) as FeatureScores;
+    } catch {
+      featureScores = undefined;
+    }
+  }
+  let recallChannels: RecallChannel[] | undefined;
+  if (row.recall_channels) {
+    try {
+      recallChannels = JSON.parse(row.recall_channels) as RecallChannel[];
+    } catch {
+      recallChannels = undefined;
+    }
+  }
   return {
     itemKey: row.item_key,
     url: row.url ?? undefined,
@@ -116,6 +146,9 @@ function rowToRecord(row: RecRow): RecommendationRecord {
     matchedInterests: Array.isArray(matched) ? matched : [],
     baseScore: row.base_score ?? undefined,
     llmScore: row.llm_score ?? undefined,
+    featureScores,
+    recallChannels,
+    exploration: (row.exploration ?? 0) === 1,
     firstRecommendedAt: row.first_recommended_at,
     lastRecommendedAt: row.last_recommended_at,
     item,
@@ -136,7 +169,7 @@ export function readRunRecords(runId: number): RecommendationRecord[] {
   const db = getDb();
   const rows = db
     .prepare(
-      "SELECT run_id, item_key, url, score, reason, matched_interests, base_score, llm_score, first_recommended_at, last_recommended_at, item_snapshot FROM recommendations WHERE run_id = ? ORDER BY score DESC"
+      `SELECT run_id, item_key, url, score, reason, matched_interests, base_score, llm_score, first_recommended_at, last_recommended_at, item_snapshot, feature_scores, recall_channels, exploration FROM recommendations WHERE run_id = ? ORDER BY score DESC`
     )
     .all(runId) as RecRow[];
   return rows.map(rowToRecord);
@@ -178,9 +211,9 @@ export function saveRun(input: SaveRunInput): RecommendationRun {
   `);
   const insertRec = db.prepare(`
     INSERT INTO recommendations
-      (run_id, item_key, url, score, reason, matched_interests, base_score, llm_score, first_recommended_at, last_recommended_at, item_snapshot)
+      (run_id, item_key, url, score, reason, matched_interests, base_score, llm_score, first_recommended_at, last_recommended_at, item_snapshot, feature_scores, recall_channels, exploration)
     VALUES
-      (@run_id, @item_key, @url, @score, @reason, @matched_interests, @base_score, @llm_score, @first_recommended_at, @last_recommended_at, @item_snapshot)
+      (@run_id, @item_key, @url, @score, @reason, @matched_interests, @base_score, @llm_score, @first_recommended_at, @last_recommended_at, @item_snapshot, @feature_scores, @recall_channels, @exploration)
   `);
   const upsertHistory = db.prepare(`
     INSERT INTO recommendation_history (url, first_recommended_at, last_recommended_at, times)
@@ -231,6 +264,13 @@ export function saveRun(input: SaveRunInput): RecommendationRun {
         first_recommended_at: firstSeen,
         last_recommended_at: input.generatedAt,
         item_snapshot: JSON.stringify(rec.item),
+        feature_scores: rec.featureScores
+          ? JSON.stringify(rec.featureScores)
+          : null,
+        recall_channels: rec.recallChannels
+          ? JSON.stringify(rec.recallChannels)
+          : null,
+        exploration: rec.exploration ? 1 : 0,
       });
       if (url) {
         upsertHistory.run(url, firstSeen, input.generatedAt);

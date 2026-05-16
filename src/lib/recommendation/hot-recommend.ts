@@ -3,9 +3,7 @@ import {
   fetchHotItems,
   fetchMenuTabs,
 } from "@/lib/rebang/api";
-import { rerankWithDeepSeek, type RerankCandidate } from "./deepseek-rerank";
 import { getEmbedding } from "./embedding";
-import { clampScore, cosineSimilarity } from "./similarity";
 import { fallbackKeywords, normalizeText } from "./text";
 import {
   findInterestByUrl,
@@ -16,23 +14,25 @@ import {
 import {
   readHotPool,
   upsertHotPool,
-  type HotPoolEntry,
   type HotPoolUpsertInput,
 } from "@/lib/server-data/hot-pool-store";
 import {
   readLatestRecommendations,
   saveRun,
-  type RecommendationRun,
   type RecommendationRecord,
+  type RecommendationRun,
   type RunTrigger,
 } from "@/lib/server-data/recommendation-store";
-import type {
-  HotRecommendation,
-  InterestItem,
-  InterestKind,
-  InterestProfile,
-} from "@/types";
+import {
+  bumpExposures,
+  markPositiveFeedback,
+} from "@/lib/server-data/exposure-store";
+import type { InterestItem, InterestKind, UserProfile } from "@/types";
 import { nanoid } from "nanoid";
+import { ensureUserProfile } from "./profile-generator";
+import { recallCandidates } from "./recall";
+import { rankCandidates } from "./ranking";
+import { applyRerank } from "./reranking";
 
 export interface HotCandidateInput extends RebangHotItem {
   source?: string;
@@ -50,37 +50,10 @@ const RECOMMENDATION_SOURCES: RecommendationSource[] = [
 ];
 
 const MAX_SOURCE_PAGES = 20;
-const MAX_SCANNED_ITEMS = 1500;
-const LLM_RERANK_LIMIT = 50;
-const RECOMMENDATION_HARD_CAP = 100;
-const LLM_WEIGHT = 0.4;
-const MIN_RECOMMENDATION_SCORE = 0.46;
-const MIN_MATCH_SIMILARITY = 0.5;
-const STRONG_MATCH_SIMILARITY = 0.62;
-const STRONG_NEGATIVE_SIMILARITY = 0.6;
-const SEMANTIC_FLOOR = 0.42;
 const POOL_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 const MANUAL_COOLDOWN_MS = 60 * 1000;
-
-type ScoredMatch = {
-  interest: InterestItem;
-  similarity: number;
-  score: number;
-};
-
-type InterestSignal = {
-  item: InterestItem;
-  embedding: number[];
-  weight: number;
-};
-
-type InterestModel = {
-  positives: InterestSignal[];
-  negatives: InterestSignal[];
-  positiveKeywords: Map<string, number>;
-  negativeKeywords: Map<string, number>;
-  sourcePreference: Map<string, number>;
-};
+const RECOMMENDATION_HARD_CAP = 80;
+const MIN_FINAL_SCORE = 0.35;
 
 function itemText(item: HotCandidateInput) {
   return normalizeText(item.title, item.describe, item.source, item.heat_str);
@@ -207,57 +180,12 @@ export async function collectFocusedHotCandidates(): Promise<HotCandidateInput[]
   return getHotPoolCandidates();
 }
 
-export function buildInterestProfile(interests: InterestItem[]): InterestProfile {
-  const keywordMap = new Map<
-    string,
-    { score: number; examples: Set<string>; keywords: Set<string> }
-  >();
-  const positiveKinds = new Set<InterestKind>(["positive", "read_later"]);
-
-  for (const item of interests) {
-    if (!positiveKinds.has(item.kind)) continue;
-    const weight = Math.max(0.05, signedWeight(item));
-    const keys = item.keywords.length ? item.keywords : fallbackKeywords(item.title);
-    for (const keyword of keys.slice(0, 6)) {
-      const normalized = keyword.trim();
-      if (!normalized) continue;
-      const group = keywordMap.get(normalized) ?? {
-        score: 0,
-        examples: new Set<string>(),
-        keywords: new Set<string>(),
-      };
-      group.score += weight;
-      group.examples.add(item.title);
-      group.keywords.add(normalized);
-      keywordMap.set(normalized, group);
-    }
-  }
-
-  const clusters = Array.from(keywordMap.entries())
-    .map(([name, data]) => ({
-      name,
-      score: Number(data.score.toFixed(2)),
-      keywords: Array.from(data.keywords).slice(0, 6),
-      examples: Array.from(data.examples).slice(0, 3),
-    }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 12);
-
-  const latest = interests
-    .map((item) => item.updatedAt)
-    .sort()
-    .at(-1);
-
-  return {
-    total: interests.length,
-    positive: interests.filter((i) => i.kind === "positive").length,
-    negative: interests.filter((i) => i.kind === "negative").length,
-    readLater: interests.filter((i) => i.kind === "read_later").length,
-    clusters,
-    updatedAt: latest ?? null,
-  };
-}
-
+/* ============================================================
+ * 兴趣反馈写入
+ *  - 创建/合并 interest 记录
+ *  - 同步给 embedding 缓存写入
+ *  - 正向反馈 (positive / read_later) 时标记曝光为 "已正反馈"，避免疲劳惩罚
+ * ============================================================ */
 export async function addInterestFeedback(
   item: HotCandidateInput,
   kind: InterestKind
@@ -295,288 +223,98 @@ export async function addInterestFeedback(
       };
 
   await upsertInterest(next);
+  // 正向反馈：标记曝光，避免再次推送时被疲劳惩罚衰减
+  if (item.www_url && (kind === "positive" || kind === "read_later")) {
+    markPositiveFeedback(item.www_url);
+  }
   return { key, embedding };
 }
 
-function normalizeSimilarity(similarity: number) {
-  return clampScore((similarity - SEMANTIC_FLOOR) / (1 - SEMANTIC_FLOOR));
-}
+/* ============================================================
+ * 推荐管线（多通道召回 + LLM 多维精排 + MMR 重排）
+ *
+ * 步骤：
+ *   1. ensureUserProfile  → 取得（或重新生成）结构化用户画像
+ *   2. recallCandidates   → 从候选池五通道并行召回
+ *   3. rankCandidates     → LLM 多维精排（domain/style/novelty/quality）
+ *   4. applyRerank        → MMR + 探索注入 + 同源约束
+ *
+ * 输出 RecommendOutcome 形态保持稳定，便于上层 saveRun。
+ * ============================================================ */
 
-function addKeywords(
-  map: Map<string, number>,
-  keywords: string[],
-  weight: number
-) {
-  for (const keyword of keywords) {
-    const normalized = keyword.trim().toLowerCase();
-    if (normalized.length < 2) continue;
-    map.set(normalized, (map.get(normalized) ?? 0) + weight);
-  }
-}
-
-function keywordScore(text: string, keywords: Map<string, number>) {
-  const normalized = text.toLowerCase();
-  let score = 0;
-  for (const [keyword, weight] of keywords) {
-    if (normalized.includes(keyword)) {
-      score += Math.min(1.5, Math.abs(weight)) * Math.min(1, keyword.length / 8);
-    }
-  }
-  return clampScore(score / 4);
-}
-
-function sourcePreferenceScore(
-  source: string | undefined,
-  preferences: Map<string, number>
-) {
-  if (!source) return 0.5;
-  const score = preferences.get(source);
-  if (score === undefined) return 0.5;
-  return clampScore((score + 3) / 6);
-}
-
-function buildInterestModel(
-  interests: InterestItem[],
-  cache: Awaited<ReturnType<typeof readEmbeddingCache>>
-): InterestModel {
-  const positives: InterestSignal[] = [];
-  const negatives: InterestSignal[] = [];
-  const positiveKeywords = new Map<string, number>();
-  const negativeKeywords = new Map<string, number>();
-  const sourcePreference = new Map<string, number>();
-
-  for (const item of interests) {
-    const weight = signedWeight(item);
-    const embedding = item.embeddingKey ? cache[item.embeddingKey] : undefined;
-    const keywords = item.keywords.length
-      ? item.keywords
-      : fallbackKeywords(item.title);
-
-    if (weight > 0) {
-      addKeywords(positiveKeywords, keywords, weight);
-      if (embedding) positives.push({ item, embedding, weight });
-    } else {
-      addKeywords(negativeKeywords, keywords, Math.abs(weight));
-      if (embedding) negatives.push({ item, embedding, weight });
-    }
-
-    if (item.source) {
-      sourcePreference.set(
-        item.source,
-        (sourcePreference.get(item.source) ?? 0) + weight
-      );
-    }
-  }
-
-  positives.sort((a, b) => b.weight - a.weight);
-  negatives.sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight));
-
-  return {
-    positives: positives.slice(0, 1200),
-    negatives: negatives.slice(0, 800),
-    positiveKeywords,
-    negativeKeywords,
-    sourcePreference,
-  };
-}
-
-function scoreSemanticMatches(
-  embedding: number[],
-  signals: InterestSignal[],
-  minSimilarity: number
-): ScoredMatch[] {
-  const matches: ScoredMatch[] = [];
-  for (const signal of signals) {
-    const similarity = cosineSimilarity(embedding, signal.embedding);
-    if (similarity < minSimilarity) continue;
-    const signalStrength = Math.min(3, Math.sqrt(Math.abs(signal.weight)));
-    matches.push({
-      interest: signal.item,
-      similarity,
-      score: normalizeSimilarity(similarity) * signalStrength,
-    });
-  }
-  return matches.sort((a, b) => b.score - a.score);
-}
-
-function hasEnoughEvidence(matches: ScoredMatch[], keyword: number) {
-  const strongest = matches[0]?.similarity ?? 0;
-  if (strongest >= STRONG_MATCH_SIMILARITY) return true;
-  if (matches.length >= 2 && strongest >= MIN_MATCH_SIMILARITY) return true;
-  return matches.length >= 1 && keyword >= 0.2;
-}
-
-function diversityKey(item: HotCandidateInput) {
-  const keywords = fallbackKeywords(itemText(item));
-  return keywords.slice(0, 2).join("|") || item.title.slice(0, 12);
-}
-
-export interface ScoredRecommendation {
-  itemKey: string;
-  url?: string;
-  score: number;
-  baseScore: number;
-  llmScore?: number;
-  reason: string;
-  matchedInterests: string[];
-  item: HotCandidateInput;
-}
-
-export interface RecommendOutcome {
-  recommendations: ScoredRecommendation[];
-  interestCount: number;
-  profile: InterestProfile;
+interface PipelineOutcome {
+  records: Array<{
+    itemKey: string;
+    url?: string;
+    score: number;
+    baseScore: number;
+    llmScore?: number;
+    reason: string;
+    matchedInterests: string[];
+    featureScores: import("@/types").FeatureScores;
+    recallChannels: import("@/types").RecallChannel[];
+    exploration: boolean;
+    item: HotCandidateInput;
+  }>;
+  profile: UserProfile;
   configured: boolean;
   candidateCount: number;
 }
 
-export async function recommendHotItems(
-  items: HotCandidateInput[]
-): Promise<RecommendOutcome> {
-  const interests = await readInterests();
-  const cache = await readEmbeddingCache();
-  const profile = buildInterestProfile(interests);
-  const model = buildInterestModel(interests, cache);
-  const candidateItems = dedupeCandidates(items).slice(0, MAX_SCANNED_ITEMS);
-
-  if (model.positives.length === 0) {
-    return {
-      recommendations: [],
-      interestCount: interests.length,
-      profile,
-      configured: Boolean(process.env.SILICONFLOW_API_KEY),
-      candidateCount: candidateItems.length,
-    };
-  }
-
-  const scored: Array<RerankCandidate & { item: HotCandidateInput }> = [];
-
-  for (const item of candidateItems) {
-    const text = itemText(item);
-    const { embedding } = await getEmbedding(text);
-    const positiveMatches = scoreSemanticMatches(
-      embedding,
-      model.positives,
-      MIN_MATCH_SIMILARITY
-    );
-    const negativeMatches = scoreSemanticMatches(
-      embedding,
-      model.negatives,
-      MIN_MATCH_SIMILARITY
-    );
-    const positiveKeywordScore = keywordScore(text, model.positiveKeywords);
-    const negativeKeywordScore = keywordScore(text, model.negativeKeywords);
-    const strongestNegative = negativeMatches[0]?.similarity ?? 0;
-
-    if (!hasEnoughEvidence(positiveMatches, positiveKeywordScore)) continue;
-    if (
-      strongestNegative >= STRONG_NEGATIVE_SIMILARITY ||
-      negativeKeywordScore >= 0.5
-    ) {
-      continue;
-    }
-
-    const topPositive = positiveMatches[0]?.score ?? 0;
-    const averagePositive =
-      positiveMatches.slice(0, 3).reduce((sum, match) => sum + match.score, 0) /
-      Math.max(1, Math.min(3, positiveMatches.length));
-    const negativePenalty =
-      (negativeMatches[0]?.score ?? 0) * 0.34 + negativeKeywordScore * 0.45;
-    const sourceScore = sourcePreferenceScore(
-      item.source,
-      model.sourcePreference
-    );
-    const evidenceBonus = Math.min(0.08, positiveMatches.length * 0.025);
-    const baseScore = clampScore(
-      topPositive * 0.36 +
-        averagePositive * 0.26 +
-        positiveKeywordScore * 0.16 +
-        sourceScore * 0.07 +
-        heatScore(item.heat_str) * 0.03 +
-        evidenceBonus -
-        negativePenalty
-    );
-
-    if (baseScore < MIN_RECOMMENDATION_SCORE) continue;
-
-    const matchedInterests = positiveMatches
-      .slice(0, 4)
-      .map((match) => match.interest.title);
-    const evidence = fallbackKeywords(text)
-      .filter((keyword) => model.positiveKeywords.has(keyword.toLowerCase()))
-      .slice(0, 4);
-
-    scored.push({
-      itemKey: item.item_key,
-      title: item.title,
-      source: item.source,
-      heat: item.heat_str,
-      baseScore,
-      matchedInterests,
-      semanticScore: Number(topPositive.toFixed(3)),
-      keywordScore: Number(positiveKeywordScore.toFixed(3)),
-      negativeScore: Number(negativePenalty.toFixed(3)),
-      evidence,
-      reason: matchedInterests.length
-        ? `高置信匹配「${matchedInterests[0]}」`
-        : "命中稳定兴趣关键词",
-      item,
-    });
-  }
-
-  // 多样性去重
-  const usedDiversityKeys = new Set<string>();
-  const diversified = scored
-    .sort((a, b) => b.baseScore - a.baseScore)
-    .filter((entry) => {
-      const key = diversityKey(entry.item);
-      if (usedDiversityKeys.has(key)) return false;
-      usedDiversityKeys.add(key);
-      return true;
-    });
-
-  // Top N 走 LLM 加权
-  const llmTargets = diversified.slice(0, LLM_RERANK_LIMIT);
-  const llmScores = await rerankWithDeepSeek(
-    interests,
-    llmTargets.map(({ item: _ignored, ...rest }) => rest as RerankCandidate)
+async function runRecommendationPipeline(
+  candidates: HotCandidateInput[],
+  options: { forceRegenerateProfile?: boolean }
+): Promise<PipelineOutcome> {
+  const profile = await ensureUserProfile(
+    options.forceRegenerateProfile ?? false
   );
-  const llmMap = new Map<string, { score: number; reason?: string }>();
-  if (llmScores) {
-    for (const entry of llmScores) {
-      llmMap.set(entry.itemKey, {
-        score: clampScore(entry.score),
-        reason: entry.reason,
-      });
-    }
+  const interests = await readInterests();
+  const embeddingCache = await readEmbeddingCache();
+  const embeddingByKey = new Map<string, number[]>();
+  for (const [key, vec] of Object.entries(embeddingCache)) {
+    embeddingByKey.set(key, vec);
   }
 
-  const finalList: ScoredRecommendation[] = diversified.map((entry) => {
-    const llm = llmMap.get(entry.itemKey);
-    const base = clampScore(entry.baseScore);
-    const finalScore = llm
-      ? clampScore(base * (1 - LLM_WEIGHT) + llm.score * LLM_WEIGHT)
-      : base;
-    return {
-      itemKey: entry.itemKey,
-      url: entry.item.www_url,
-      score: Number(finalScore.toFixed(4)),
-      baseScore: Number(base.toFixed(4)),
-      llmScore: llm ? Number(llm.score.toFixed(4)) : undefined,
-      reason: llm?.reason ?? entry.reason ?? "命中稳定兴趣画像",
-      matchedInterests: entry.matchedInterests,
-      item: entry.item,
-    };
+  const evidence = await recallCandidates(
+    profile,
+    candidates,
+    interests,
+    embeddingByKey
+  );
+
+  const ranked = await rankCandidates(profile, evidence, {
+    llmEnabled: Boolean(process.env.DEEPSEEK_API_KEY),
   });
 
-  finalList.sort((a, b) => b.score - a.score);
+  const reranked = await applyRerank(ranked, {
+    capacity: RECOMMENDATION_HARD_CAP,
+    lambda: 0.72,
+    minExploration: 2,
+  });
+
+  const records: PipelineOutcome["records"] = reranked
+    .filter((r) => r.finalScore >= MIN_FINAL_SCORE)
+    .map((r) => ({
+      itemKey: r.evidence.candidate.item_key,
+      url: r.evidence.candidate.www_url,
+      score: Number(r.finalScore.toFixed(4)),
+      baseScore: Number(r.features.baseScore.toFixed(4)),
+      llmScore: Number(r.features.llmOverall.toFixed(4)),
+      reason: r.reason,
+      matchedInterests: r.evidence.positiveMatches
+        .slice(0, 3)
+        .map((m) => m.interest.title),
+      featureScores: r.features,
+      recallChannels: Array.from(r.evidence.channels),
+      exploration: r.evidence.channels.has("exploration"),
+      item: r.evidence.candidate,
+    }));
 
   return {
-    recommendations: finalList.slice(0, RECOMMENDATION_HARD_CAP),
-    interestCount: interests.length,
+    records,
     profile,
     configured: Boolean(process.env.SILICONFLOW_API_KEY),
-    candidateCount: candidateItems.length,
+    candidateCount: candidates.length,
   };
 }
 
@@ -633,7 +371,9 @@ export async function runHotRecommendation(
   const startedAt = Date.now();
   await ensurePoolReady(options.forceRefreshPool ?? false);
   const candidates = getHotPoolCandidates();
-  const result = await recommendHotItems(candidates);
+  const result = await runRecommendationPipeline(candidates, {
+    forceRegenerateProfile: options.forceRecompute === true,
+  });
   const generatedAt = new Date().toISOString();
   const run = saveRun({
     generatedAt,
@@ -642,7 +382,7 @@ export async function runHotRecommendation(
     trigger: options.trigger,
     profile: result.profile,
     configured: result.configured,
-    items: result.recommendations.map((rec) => ({
+    items: result.records.map((rec) => ({
       itemKey: rec.itemKey,
       url: rec.url,
       score: rec.score,
@@ -650,9 +390,17 @@ export async function runHotRecommendation(
       matchedInterests: rec.matchedInterests,
       baseScore: rec.baseScore,
       llmScore: rec.llmScore,
+      featureScores: rec.featureScores,
+      recallChannels: rec.recallChannels,
+      exploration: rec.exploration,
       item: rec.item,
     })),
   });
+  // 推荐曝光埋点
+  const urls = result.records
+    .map((r) => r.url)
+    .filter((u): u is string => Boolean(u));
+  bumpExposures(urls, generatedAt);
   const records = readLatestRecommendations().records;
   const pool = readHotPool();
   return { run, records, pool: { total: pool.length } };

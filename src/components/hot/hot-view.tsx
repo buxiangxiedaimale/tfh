@@ -9,21 +9,25 @@ import {
   RefreshCw,
   Sparkles,
   ThumbsDown,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { RebangHotItem, RebangTab } from "@/lib/rebang/types";
 import {
-  itemImageUrl,
   LEAF_TAB_DEFAULT_SUB,
   tabIconUrl,
 } from "@/lib/rebang/api";
 import { useTodoStore } from "@/store/todo-store";
 import type {
+  FeatureScores,
   HotRecommendation,
   InterestKind,
-  InterestProfile,
+  ProfileOverride,
+  ProfileTagType,
+  RecallChannel,
+  UserProfile,
 } from "@/types";
 
 function TabIcon({ tab }: { tab: RebangTab }) {
@@ -60,6 +64,9 @@ type HotRecommendationRecord = HotRecommendation & {
   url?: string;
   baseScore?: number;
   llmScore?: number;
+  featureScores?: FeatureScores;
+  recallChannels?: RecallChannel[];
+  exploration?: boolean;
   firstRecommendedAt?: string;
   lastRecommendedAt?: string;
   item: RebangHotItem & { source?: string };
@@ -72,8 +79,49 @@ type HotRunInfo = {
   resultCount: number;
   trigger: string;
   configured: boolean;
-  profile: InterestProfile | null;
+  profile: UserProfile | null;
 };
+
+const RECALL_CHANNEL_LABEL: Record<RecallChannel, string> = {
+  domain: "领域",
+  identity: "身份",
+  style: "风格",
+  freshness: "新鲜",
+  exploration: "探索",
+  negative_filter: "已过滤",
+};
+
+const TAG_SECTIONS: Array<{
+  type: ProfileTagType;
+  title: string;
+  empty: string;
+  badgeClass: string;
+}> = [
+  {
+    type: "identity",
+    title: "身份",
+    empty: "尚未推断身份。",
+    badgeClass: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-300",
+  },
+  {
+    type: "domain",
+    title: "兴趣领域",
+    empty: "尚未识别兴趣领域。",
+    badgeClass: "bg-accent/10 text-accent",
+  },
+  {
+    type: "style",
+    title: "偏好风格",
+    empty: "尚未识别风格。",
+    badgeClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
+  },
+  {
+    type: "avoid",
+    title: "避免内容",
+    empty: "未设置避免标签。",
+    badgeClass: "bg-rose-500/10 text-rose-600 dark:text-rose-300",
+  },
+];
 
 const RECOMMEND_STEPS = [
   { key: "fetch", label: "抓取候选" },
@@ -102,7 +150,11 @@ export function HotView() {
   const [items, setItems] = useState<RebangHotItem[]>([]);
   const [recommendations, setRecommendations] = useState<HotRecommendationRecord[]>([]);
   const [runInfo, setRunInfo] = useState<HotRunInfo | null>(null);
-  const [interestProfile, setInterestProfile] = useState<InterestProfile | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [profileOverrides, setProfileOverrides] = useState<ProfileOverride[]>(
+    []
+  );
+  const [profileBusy, setProfileBusy] = useState(false);
   const [recommendationMode, setRecommendationMode] = useState(false);
   const [recommending, setRecommending] = useState(false);
   const [activeStep, setActiveStep] = useState<number>(-1);
@@ -110,6 +162,12 @@ export function HotView() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tagInputs, setTagInputs] = useState<Record<ProfileTagType, string>>({
+    identity: "",
+    domain: "",
+    style: "",
+    avoid: "",
+  });
 
   const currentTab = useMemo(
     () => tabs.find((t) => t.key === activeTab),
@@ -225,10 +283,86 @@ export function HotView() {
     } | null) => {
       if (!snapshot) return;
       setRecommendations(snapshot.records ?? []);
-      setInterestProfile(snapshot.run?.profile ?? null);
+      if (snapshot.run?.profile) {
+        // run.profile 是同步快照，画像面板优先以 /api/profile 为准
+        // 但首次加载也用它兜底
+        setUserProfile((curr) => curr ?? snapshot.run!.profile!);
+      }
       setRunInfo(snapshot.run ?? null);
     },
     []
+  );
+
+  const fetchUserProfile = useCallback(async () => {
+    try {
+      const res = await fetch("/api/profile", { cache: "no-store" });
+      if (!res.ok) return;
+      const json = await res.json();
+      setUserProfile(json.profile ?? null);
+      setProfileOverrides(json.overrides ?? []);
+    } catch {
+      // 静默失败
+    }
+  }, []);
+
+  const updateTag = useCallback(
+    async (
+      action: "addTag" | "removeTag" | "deleteOverride",
+      payload: {
+        tagType?: ProfileTagType;
+        tagValue?: string;
+        overrideId?: number;
+      }
+    ) => {
+      if (profileBusy) return;
+      setProfileBusy(true);
+      try {
+        const res = await fetch("/api/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, ...payload }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "操作失败");
+        setUserProfile(json.profile ?? null);
+        setProfileOverrides(json.overrides ?? []);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "操作失败");
+      } finally {
+        setProfileBusy(false);
+      }
+    },
+    [profileBusy]
+  );
+
+  const regenerateProfile = useCallback(async () => {
+    if (profileBusy) return;
+    setProfileBusy(true);
+    try {
+      const res = await fetch("/api/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "regenerate" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "重新生成失败");
+      setUserProfile(json.profile ?? null);
+      setProfileOverrides(json.overrides ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "重新生成画像失败");
+    } finally {
+      setProfileBusy(false);
+    }
+  }, [profileBusy]);
+
+  const handleAddTagSubmit = useCallback(
+    async (type: ProfileTagType) => {
+      const value = (tagInputs[type] ?? "").trim();
+      if (!value) return;
+      setTagInputs((prev) => ({ ...prev, [type]: "" }));
+      await updateTag("addTag", { tagType: type, tagValue: value });
+    },
+    [tagInputs, updateTag]
   );
 
   const loadCachedRecommendations = useCallback(async () => {
@@ -296,7 +430,8 @@ export function HotView() {
 
   useEffect(() => {
     void loadCachedRecommendations();
-  }, [loadCachedRecommendations]);
+    void fetchUserProfile();
+  }, [loadCachedRecommendations, fetchUserProfile]);
 
   const sendFeedback = async (item: RebangHotItem, kind: InterestKind) => {
     const source = itemSourceMap.get(item.item_key) ?? sourceName;
@@ -455,19 +590,25 @@ export function HotView() {
                     )}
                   />
                   <span className="font-medium text-foreground">个性化推荐</span>
-                  {runInfo ? (
-                    <span className="text-[10px] text-muted-foreground">
-                      上次更新 {formatRelative(runInfo.generatedAt)} · {runInfo.resultCount} 条 · 候选 {runInfo.candidateCount}
-                    </span>
-                  ) : null}
-                  {interestProfile ? (
-                    <span className="text-[10px] text-muted-foreground">
-                      样本 {interestProfile.total} · 稍后看 {interestProfile.readLater}
-                    </span>
-                  ) : null}
                   <Button
                     size="sm"
-                    className="ml-auto h-7 gap-1.5"
+                    variant="secondary"
+                    className="h-7 gap-1.5"
+                    onClick={regenerateProfile}
+                    disabled={profileBusy}
+                    title="使用 LLM 基于最新兴趣样本重新分析画像"
+                  >
+                    <RefreshCw
+                      className={cn(
+                        "h-3.5 w-3.5",
+                        profileBusy && "animate-spin"
+                      )}
+                    />
+                    {profileBusy ? "重生成中…" : "重新画像"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-7 gap-1.5"
                     onClick={() => generateRecommendations(true)}
                     disabled={recommending}
                   >
@@ -481,62 +622,161 @@ export function HotView() {
                   </Button>
                 </div>
                 {activeStep >= 0 ? (
-                  <div className="mt-3 grid grid-cols-5 gap-1.5">
-                    {RECOMMEND_STEPS.map((step, i) => {
-                      const done =
-                        i < activeStep ||
-                        activeStep === RECOMMEND_STEPS.length;
-                      const current =
-                        i === activeStep &&
-                        activeStep < RECOMMEND_STEPS.length;
-                      return (
+                <div className="mt-3 grid grid-cols-5 gap-1.5">
+                  {RECOMMEND_STEPS.map((step, i) => {
+                    const done =
+                      i < activeStep ||
+                      activeStep === RECOMMEND_STEPS.length;
+                    const current =
+                      i === activeStep &&
+                      activeStep < RECOMMEND_STEPS.length;
+                    return (
+                      <div
+                        key={step.key}
+                        className="flex flex-col items-stretch gap-1"
+                      >
                         <div
-                          key={step.key}
-                          className="flex flex-col items-stretch gap-1"
+                          className={cn(
+                            "h-1 rounded-full transition-colors",
+                            done
+                              ? "bg-accent"
+                              : current
+                              ? "bg-accent/60 animate-pulse"
+                              : "bg-surface-2"
+                          )}
+                        />
+                        <span
+                          className={cn(
+                            "text-center text-[10px] transition-colors",
+                            done || current
+                              ? "text-foreground"
+                              : "text-muted-foreground"
+                          )}
                         >
-                          <div
-                            className={cn(
-                              "h-1 rounded-full transition-colors",
-                              done
-                                ? "bg-accent"
-                                : current
-                                ? "bg-accent/60 animate-pulse"
-                                : "bg-surface-2"
-                            )}
-                          />
-                          <span
-                            className={cn(
-                              "text-center text-[10px] transition-colors",
-                              done || current
-                                ? "text-foreground"
-                                : "text-muted-foreground"
-                            )}
-                          >
-                            {step.label}
+                          {step.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {userProfile?.summary ? (
+                <p className="mt-3 text-foreground/80">
+                  {userProfile.summary}
+                </p>
+              ) : null}
+              {userProfile ? (
+                <div className="mt-3 space-y-3">
+                  {TAG_SECTIONS.map((section) => {
+                    const values =
+                      section.type === "identity"
+                        ? userProfile.identity
+                        : section.type === "domain"
+                        ? userProfile.domains.map((d) => d.name)
+                        : section.type === "style"
+                        ? userProfile.styles
+                        : userProfile.avoid;
+                    const domainMap = new Map(
+                      userProfile.domains.map((d) => [d.name, d])
+                    );
+                    return (
+                      <div key={section.type}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-medium text-foreground">
+                            {section.title}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {values.length} 项
                           </span>
                         </div>
-                      );
-                    })}
-                  </div>
-                ) : null}
-                {interestProfile && interestProfile.clusters.length ? (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {interestProfile.clusters.slice(0, 8).map((cluster) => (
-                      <span
-                        key={cluster.name}
-                        className="rounded-full bg-surface-1 px-2 py-1"
-                        title={cluster.examples.join(" / ")}
-                      >
-                        {cluster.name}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {values.length === 0 ? (
+                            <span className="text-[10px] text-muted-foreground">
+                              {section.empty}
+                            </span>
+                          ) : (
+                            values.map((value) => {
+                              const domain =
+                                section.type === "domain"
+                                  ? domainMap.get(value)
+                                  : null;
+                              return (
+                                <span
+                                  key={value}
+                                  className={cn(
+                                    "group inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]",
+                                    section.badgeClass
+                                  )}
+                                  title={
+                                    domain && domain.subtopics.length
+                                      ? `子话题: ${domain.subtopics.join(
+                                          "、"
+                                        )} · 权重 ${(domain.weight * 100).toFixed(
+                                          0
+                                        )}%`
+                                      : undefined
+                                  }
+                                >
+                                  {value}
+                                  {domain ? (
+                                    <span className="text-[9px] opacity-60">
+                                      {(domain.weight * 100).toFixed(0)}%
+                                    </span>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    className="opacity-50 transition hover:opacity-100"
+                                    onClick={() =>
+                                      updateTag("removeTag", {
+                                        tagType: section.type,
+                                        tagValue: value,
+                                      })
+                                    }
+                                    disabled={profileBusy}
+                                    title="移除"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </span>
+                              );
+                            })
+                          )}
+                          <form
+                            className="inline-flex items-center"
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              void handleAddTagSubmit(section.type);
+                            }}
+                          >
+                            <input
+                              type="text"
+                              value={tagInputs[section.type]}
+                              onChange={(e) =>
+                                setTagInputs((prev) => ({
+                                  ...prev,
+                                  [section.type]: e.target.value,
+                                }))
+                              }
+                              placeholder="+ 添加"
+                              className="h-6 w-20 rounded-full border border-dashed border-border bg-transparent px-2 text-[11px] outline-none focus:border-accent focus:w-32"
+                              disabled={profileBusy}
+                            />
+                          </form>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="mt-3">
+                  继续在热榜里点「感兴趣 / 不感兴趣」积累样本，我会自动构建你的画像。
+                </p>
+              )}
               </li>
             ) : null}
             {recommendationMode && recommendations.length === 0 && !recommending ? (
               <li className="rounded-2xl border border-dashed border-border bg-surface-1 p-6 text-center text-sm text-muted-foreground">
-                {interestProfile && interestProfile.total > 0
+                {userProfile && userProfile.stats.total > 0
                   ? "还没有生成过推荐。点击右上「立即更新」试试。"
                   : "还没有足够的兴趣样本。先在热榜里点几条「感兴趣」，我就能开始学习。"}
               </li>
@@ -637,8 +877,57 @@ export function HotView() {
                     </div>
                     {rec ? (
                       <div className="mt-2 rounded-xl bg-accent/5 px-3 py-2 text-xs text-muted-foreground">
+                        {rec.recallChannels && rec.recallChannels.length > 0 ? (
+                          <div className="mb-1 flex flex-wrap gap-1">
+                            {rec.recallChannels.map((ch) => (
+                              <span
+                                key={ch}
+                                className={cn(
+                                  "rounded-full px-1.5 py-0.5 text-[9px]",
+                                  ch === "exploration"
+                                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-300"
+                                    : "bg-surface-2 text-muted-foreground"
+                                )}
+                              >
+                                {RECALL_CHANNEL_LABEL[ch]}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                         <p className="text-foreground/80">{rec.reason}</p>
-                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                        {rec.featureScores ? (
+                          <div className="mt-1.5 grid grid-cols-4 gap-1.5">
+                            {(
+                              [
+                                ["domainMatch", "领域"],
+                                ["styleMatch", "风格"],
+                                ["novelty", "新颖"],
+                                ["quality", "质量"],
+                              ] as const
+                            ).map(([key, label]) => {
+                              const v = rec.featureScores?.[key] ?? 0;
+                              return (
+                                <div key={key} className="flex flex-col gap-0.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[9px]">{label}</span>
+                                    <span className="text-[9px] tabular-nums">
+                                      {Math.round(v * 100)}
+                                    </span>
+                                  </div>
+                                  <div className="h-1 rounded-full bg-surface-2">
+                                    <div
+                                      className="h-full rounded-full bg-accent/70"
+                                      style={{
+                                        width: `${Math.max(0, Math.min(100, v * 100))}%`,
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
                           {rec.matchedInterests.length ? (
                             <span>
                               匹配兴趣：{rec.matchedInterests.slice(0, 2).join("、")}
