@@ -13,7 +13,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -40,11 +40,6 @@ export function TaskDetail() {
   const task = tasks.find((t) => t.id === selectedTaskId);
   const [subtaskInput, setSubtaskInput] = useState("");
   const [moreOpen, setMoreOpen] = useState(false);
-
-  useEffect(() => {
-    setSubtaskInput("");
-    setMoreOpen(false);
-  }, [selectedTaskId]);
 
   if (!task) return null;
 

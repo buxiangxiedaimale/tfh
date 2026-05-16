@@ -91,8 +91,8 @@ export function InlineTaskAdd() {
             ref={inputRef}
             placeholder={
               aiConfigured
-                ? "快捷添加，如：明天下午开会"
-                : "快捷添加任务"
+                ? "试试：明天下午 3 点高优先级开会"
+                : "快捷添加任务（AI 未启用）"
             }
             value={title}
             onChange={(e) => {
@@ -128,13 +128,22 @@ export function InlineTaskAdd() {
           {loading ? "…" : "添加"}
         </Button>
       </form>
-      <p className="mt-1.5 text-xs text-muted-foreground">
+      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
         {hint ? (
           <span className="text-amber-600 dark:text-amber-400">{hint}</span>
         ) : aiConfigured ? (
-          <>点击「添加」直接生成今天任务；详细设置请点右上角 +</>
+          <>
+            <Sparkles className="h-3 w-3 text-accent" />
+            <span>
+              AI 已启用，可识别日期/优先级/项目；详细设置请点右上角 +
+            </span>
+          </>
         ) : (
-          <>点击「添加」直接生成今天任务；详细设置请点右上角 +</>
+          <>
+            <span>
+              AI 未启用，将按原文添加；详细设置请点右上角 +
+            </span>
+          </>
         )}
       </p>
     </div>

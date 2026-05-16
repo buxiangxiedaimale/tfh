@@ -29,10 +29,14 @@ export function MemoCard({ memo }: MemoCardProps) {
 
   useEffect(() => {
     if (editing) {
-      setDraft(memo.content);
       textareaRef.current?.focus();
     }
-  }, [editing, memo.content]);
+  }, [editing]);
+
+  const enterEdit = () => {
+    setDraft(memo.content);
+    setEditingMemoId(memo.id);
+  };
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -144,7 +148,7 @@ export function MemoCard({ memo }: MemoCardProps) {
           <button
             type="button"
             className="w-full text-left"
-            onClick={() => setEditingMemoId(memo.id)}
+            onClick={enterEdit}
           >
             <MemoContent
               content={memo.content}

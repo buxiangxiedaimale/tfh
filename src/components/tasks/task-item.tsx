@@ -42,7 +42,7 @@ export function TaskItem({ task }: TaskItemProps) {
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group elevated mb-2 flex items-start gap-2.5 rounded-2xl border border-border/50 bg-surface-1 px-3 py-3 transition-all duration-200",
+        "group elevated mb-2 flex items-start gap-2.5 rounded-2xl border border-border/50 bg-surface-1 px-3 py-3 transition-all duration-200 active:scale-[0.99] sm:px-3.5 sm:py-3.5",
         selected && "border-accent/40 bg-accent-muted ring-1 ring-accent/20",
         !selected && "hover:border-border hover:shadow-md",
         isDragging && "z-10 scale-[1.01] opacity-90 shadow-lg"
@@ -71,7 +71,7 @@ export function TaskItem({ task }: TaskItemProps) {
       >
         <p
           className={cn(
-            "text-sm font-medium leading-snug",
+            "text-[15px] font-medium leading-snug sm:text-sm",
             task.completed && "text-muted-foreground line-through"
           )}
         >

@@ -13,8 +13,13 @@ import { cn } from "@/lib/utils";
 import { useTodoStore } from "@/store/todo-store";
 
 export function AppShell() {
-  const { sidebarOpen, setSidebarOpen, selectedTaskId, activeView } =
-    useTodoStore();
+  const {
+    sidebarOpen,
+    setSidebarOpen,
+    selectedTaskId,
+    activeView,
+    quickAddOpen,
+  } = useTodoStore();
 
   const tasksMode = isTasksView(activeView);
   const showTaskDetail = selectedTaskId && tasksMode;
@@ -49,12 +54,12 @@ export function AppShell() {
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <MainContent />
-          {showTaskDetail ? <TaskDetail /> : null}
+          {showTaskDetail ? <TaskDetail key={selectedTaskId} /> : null}
         </div>
       </main>
 
       <BottomNav />
-      <QuickAdd />
+      {quickAddOpen ? <QuickAdd /> : null}
     </div>
   );
 }
