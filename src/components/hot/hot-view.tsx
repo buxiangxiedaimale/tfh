@@ -1,12 +1,11 @@
 "use client";
 
 import { ExternalLink, Flame, ListPlus, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { RebangHotItem, RebangTab } from "@/lib/rebang/types";
 import {
-  itemImageUrl,
   LEAF_TAB_DEFAULT_SUB,
   tabIconUrl,
 } from "@/lib/rebang/api";
@@ -36,7 +35,9 @@ function TabIcon({ tab }: { tab: RebangTab }) {
   );
 }
 
-const TOP_SUB_TABS = [
+type HotSubTab = { key: string; label: string };
+
+const TOP_SUB_TABS: HotSubTab[] = [
   { key: "today", label: "今日" },
   { key: "weekly", label: "本周" },
   { key: "monthly", label: "本月" },
@@ -65,17 +66,22 @@ export function HotView() {
   }, [activeTab, currentTab]);
 
   const loadItems = useCallback(
-    async (silent = false) => {
+    async (
+      tabKey: string,
+      subKey: string,
+      tabSubTabs: HotSubTab[],
+      silent = false
+    ) => {
       if (!silent) setLoading(true);
       else setRefreshing(true);
       setError(null);
 
       try {
-        const params = new URLSearchParams({ tab: activeTab, page: "1" });
-        if (activeTab === "top") {
-          params.set("sub_tab", subTab || "today");
-        } else if (subTabs.length > 0 && subTab) {
-          params.set("sub_tab", subTab);
+        const params = new URLSearchParams({ tab: tabKey, page: "1" });
+        if (tabKey === "top") {
+          params.set("sub_tab", subKey || "today");
+        } else if (tabSubTabs.length > 0 && subKey) {
+          params.set("sub_tab", subKey);
         }
         const res = await fetch(`/api/rebang/items?${params}`);
         const json = await res.json();
@@ -89,7 +95,7 @@ export function HotView() {
         setRefreshing(false);
       }
     },
-    [activeTab, subTab, subTabs.length]
+    []
   );
 
   useEffect(() => {
@@ -100,33 +106,44 @@ export function HotView() {
         if (homeTabs?.length) {
           setTabs(homeTabs);
           const current = homeTabs.find((t) => t.current_show) ?? homeTabs[0];
+          const currentSubTabs =
+            current.key === "top"
+              ? TOP_SUB_TABS
+              : current.child?.map((c) => ({ key: c.key, label: c.name })) ?? [];
+          const initialSubTab =
+            current.key === "top"
+              ? "today"
+              : current.child?.[0]?.key ??
+                LEAF_TAB_DEFAULT_SUB[current.key] ??
+                "";
           setActiveTab(current.key);
-          if (current.key === "top") setSubTab("today");
-          else if (current.child?.[0]) setSubTab(current.child[0].key);
-          else if (LEAF_TAB_DEFAULT_SUB[current.key])
-            setSubTab(LEAF_TAB_DEFAULT_SUB[current.key]);
+          setSubTab(initialSubTab);
+          loadItems(current.key, initialSubTab, currentSubTabs);
         }
       })
       .catch(() => setError("无法加载热榜分类"));
-  }, []);
-
-  useEffect(() => {
-    if (tabs.length) loadItems();
-  }, [tabs.length, loadItems]);
+  }, [loadItems]);
 
   const switchTab = (tab: RebangTab) => {
+    const nextSubTabs =
+      tab.key === "top"
+        ? TOP_SUB_TABS
+        : tab.child?.map((c) => ({ key: c.key, label: c.name })) ?? [];
+    const nextSubTab =
+      tab.key === "top"
+        ? "today"
+        : tab.child?.find((c) => c.current_show)?.key ??
+          tab.child?.[0]?.key ??
+          LEAF_TAB_DEFAULT_SUB[tab.key] ??
+          "";
     setActiveTab(tab.key);
-    if (tab.key === "top") {
-      setSubTab("today");
-    } else if (tab.child?.length) {
-      const defaultChild =
-        tab.child.find((c) => c.current_show) ?? tab.child[0];
-      setSubTab(defaultChild.key);
-    } else if (LEAF_TAB_DEFAULT_SUB[tab.key]) {
-      setSubTab(LEAF_TAB_DEFAULT_SUB[tab.key]);
-    } else {
-      setSubTab("");
-    }
+    setSubTab(nextSubTab);
+    loadItems(tab.key, nextSubTab, nextSubTabs);
+  };
+
+  const switchSubTab = (key: string) => {
+    setSubTab(key);
+    loadItems(activeTab, key, subTabs);
   };
 
   const saveAsTask = (item: RebangHotItem) => {
@@ -135,6 +152,16 @@ export function HotView() {
       description: item.www_url,
       priority: "none",
     });
+  };
+
+  const openHotLink = (event: MouseEvent<HTMLAnchorElement>, url: string) => {
+    if (
+      window.matchMedia("(pointer: coarse)").matches ||
+      /Android|iPhone|iPad|iPod|Mobile/i.test(window.navigator.userAgent)
+    ) {
+      event.preventDefault();
+      window.open(url, "_self");
+    }
   };
 
   return (
@@ -163,7 +190,7 @@ export function HotView() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => loadItems(true)}
+            onClick={() => loadItems(activeTab, subTab, subTabs, true)}
             disabled={refreshing}
             className="gap-1.5"
           >
@@ -196,7 +223,7 @@ export function HotView() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => loadItems(true)}
+            onClick={() => loadItems(activeTab, subTab, subTabs, true)}
             disabled={refreshing}
             className="h-7 w-7 shrink-0 md:hidden"
             title="刷新"
@@ -212,7 +239,7 @@ export function HotView() {
               <button
                 key={st.key}
                 type="button"
-                onClick={() => setSubTab(st.key)}
+                onClick={() => switchSubTab(st.key)}
                 className={cn(
                   "shrink-0 rounded-md px-2 py-0.5 text-[10px] font-medium",
                   subTab === st.key
@@ -233,7 +260,11 @@ export function HotView() {
         ) : error ? (
           <div className="py-20 text-center">
             <p className="text-destructive">{error}</p>
-            <Button variant="secondary" className="mt-4" onClick={() => loadItems()}>
+            <Button
+              variant="secondary"
+              className="mt-4"
+              onClick={() => loadItems(activeTab, subTab, subTabs)}
+            >
               重试
             </Button>
           </div>
@@ -253,6 +284,7 @@ export function HotView() {
                       href={item.www_url}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={(event) => openHotLink(event, item.www_url)}
                       className="text-sm font-medium leading-snug hover:text-accent"
                     >
                       {item.title}
@@ -278,6 +310,7 @@ export function HotView() {
                       target="_blank"
                       rel="noopener noreferrer"
                       title="打开原文"
+                      onClick={(event) => openHotLink(event, item.www_url)}
                       className="inline-flex h-7 w-7 items-center justify-center rounded-xl text-muted-foreground hover:bg-surface-2 hover:text-foreground"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
