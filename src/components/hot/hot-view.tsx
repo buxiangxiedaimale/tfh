@@ -1,6 +1,16 @@
 "use client";
 
-import { ExternalLink, Flame, ListPlus, RefreshCw, TrendingUp } from "lucide-react";
+import {
+  Check,
+  ExternalLink,
+  Flame,
+  ListPlus,
+  RefreshCw,
+  RotateCcw,
+  Settings2,
+  TrendingUp,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -9,6 +19,7 @@ import {
   LEAF_TAB_DEFAULT_SUB,
   tabIconUrl,
 } from "@/lib/rebang/api";
+import { useHotVisibleTabs } from "@/lib/hot/use-visible-tabs";
 import { useTodoStore } from "@/store/todo-store";
 
 function TabIcon({ tab }: { tab: RebangTab }) {
@@ -62,6 +73,15 @@ export function HotView() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [manageOpen, setManageOpen] = useState(false);
+  const { isVisible, toggle, reset, selectAll, isCustomized } =
+    useHotVisibleTabs();
+
+  const allTabKeys = useMemo(() => tabs.map((t) => t.key), [tabs]);
+  const visibleTabs = useMemo(
+    () => tabs.filter((t) => isVisible(t.key)),
+    [tabs, isVisible]
+  );
 
   const currentTab = useMemo(
     () => tabs.find((t) => t.key === activeTab),
@@ -213,9 +233,9 @@ export function HotView() {
       </header>
 
       <div className="shrink-0 border-b border-border/60 bg-background/80">
-        <div className="flex items-center gap-2 px-3 py-2 sm:px-6">
-          <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto scrollbar-thin">
-            {tabs.map((tab) => (
+        <div className="flex items-start gap-2 px-3 py-2.5 sm:px-6 sm:py-3">
+          <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
@@ -224,14 +244,30 @@ export function HotView() {
                   "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-150 active:scale-95",
                   activeTab === tab.key
                     ? "bg-accent text-accent-foreground shadow-sm"
-                    : "bg-surface-2 text-muted-foreground hover:text-foreground"
+                    : "bg-surface-2 text-muted-foreground hover:bg-surface-3 hover:text-foreground"
                 )}
               >
                 {tab.avatar ? <TabIcon tab={tab} /> : null}
                 {tab.name}
               </button>
             ))}
+            {visibleTabs.length === 0 ? (
+              <span className="text-xs text-muted-foreground py-1.5">
+                未选择任何来源，点击右侧管理添加
+              </span>
+            ) : null}
           </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setManageOpen(true)}
+            className="h-7 shrink-0 gap-1 rounded-full px-2.5 text-xs"
+            aria-label="管理来源"
+            title="管理来源"
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">管理</span>
+          </Button>
         </div>
         {subTabs.length > 0 ? (
           <div className="flex gap-1 overflow-x-auto border-t border-border/60 px-3 py-2 sm:px-6 scrollbar-thin">
@@ -253,6 +289,18 @@ export function HotView() {
           </div>
         ) : null}
       </div>
+
+      {manageOpen ? (
+        <ManageTabsSheet
+          tabs={tabs}
+          isVisible={isVisible}
+          isCustomized={isCustomized}
+          onToggle={(key) => toggle(key, allTabKeys)}
+          onSelectAll={() => selectAll(allTabKeys)}
+          onReset={reset}
+          onClose={() => setManageOpen(false)}
+        />
+      ) : null}
 
       <div className="flex-1 overflow-y-auto px-3 pb-[calc(5rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pt-4 md:pb-6">
         {loading ? (
@@ -349,5 +397,131 @@ export function HotView() {
         )}
       </div>
     </div>
+  );
+}
+
+interface ManageTabsSheetProps {
+  tabs: RebangTab[];
+  isVisible: (key: string) => boolean;
+  isCustomized: boolean;
+  onToggle: (key: string) => void;
+  onSelectAll: () => void;
+  onReset: () => void;
+  onClose: () => void;
+}
+
+function ManageTabsSheet({
+  tabs,
+  isVisible,
+  isCustomized,
+  onToggle,
+  onSelectAll,
+  onReset,
+  onClose,
+}: ManageTabsSheetProps) {
+  const visibleCount = useMemo(
+    () => tabs.filter((t) => isVisible(t.key)).length,
+    [tabs, isVisible]
+  );
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div
+        className={cn(
+          "fixed z-[70] flex flex-col overflow-hidden bg-surface-1 shadow-2xl",
+          "inset-x-0 bottom-0 max-h-[85dvh] rounded-t-3xl border-t border-border/60 pb-[env(safe-area-inset-bottom)]",
+          "sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-[8%] sm:w-[calc(100%-2rem)] sm:max-w-xl sm:-translate-x-1/2 sm:rounded-3xl sm:border sm:pb-0"
+        )}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-5 py-3.5 sm:px-6 sm:py-4">
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold sm:text-lg">管理来源</h3>
+            <p className="text-xs text-muted-foreground">
+              已显示 {visibleCount} / {tabs.length} 个
+              {isCustomized ? "（已自定义）" : ""}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="-mr-2"
+            onClick={onClose}
+            aria-label="关闭"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-5 py-2.5 sm:px-6">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onSelectAll}
+            className="h-8 gap-1 rounded-full px-3 text-xs"
+          >
+            <Check className="h-3.5 w-3.5" />
+            全选
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onReset}
+            disabled={!isCustomized}
+            className="h-8 gap-1 rounded-full px-3 text-xs"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            恢复默认
+          </Button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+            {tabs.map((tab) => {
+              const checked = isVisible(tab.key);
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => onToggle(tab.key)}
+                  className={cn(
+                    "group flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm transition-all duration-150 active:scale-95",
+                    checked
+                      ? "border-accent/40 bg-accent-muted text-accent shadow-sm"
+                      : "border-border bg-surface-1 text-foreground hover:border-border hover:bg-surface-2"
+                  )}
+                >
+                  {tab.avatar ? <TabIcon tab={tab} /> : (
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-md bg-muted text-[9px] font-bold text-muted-foreground">
+                      {tab.name.slice(0, 1)}
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1 truncate">{tab.name}</span>
+                  <span
+                    className={cn(
+                      "flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
+                      checked
+                        ? "border-accent bg-accent text-accent-foreground"
+                        : "border-border"
+                    )}
+                  >
+                    {checked ? <Check className="h-3 w-3" /> : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="shrink-0 border-t border-border/60 px-5 py-3 sm:px-6">
+          <Button onClick={onClose} className="w-full" size="lg">
+            完成
+          </Button>
+        </div>
+      </div>
+    </>
   );
 }
