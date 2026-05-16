@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, Flame, ListPlus, RefreshCw } from "lucide-react";
+import { ExternalLink, Flame, ListPlus, RefreshCw, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,7 +17,7 @@ function TabIcon({ tab }: { tab: RebangTab }) {
 
   if (!src || failed) {
     return (
-      <span className="flex h-3 w-3 shrink-0 items-center justify-center rounded-sm bg-accent/80 text-[8px] font-bold text-white">
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-md bg-accent/80 text-[9px] font-bold text-white">
         {tab.name.slice(0, 1)}
       </span>
     );
@@ -27,12 +27,22 @@ function TabIcon({ tab }: { tab: RebangTab }) {
     <img
       src={src}
       alt=""
-      className="h-3 w-3 shrink-0 rounded-sm object-cover"
+      className="h-4 w-4 shrink-0 rounded-md object-cover"
       loading="lazy"
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
     />
   );
+}
+
+function rankClasses(rank: number) {
+  if (rank === 1)
+    return "bg-gradient-to-br from-red-500 to-orange-500 text-white shadow-sm";
+  if (rank === 2)
+    return "bg-gradient-to-br from-orange-400 to-amber-400 text-white shadow-sm";
+  if (rank === 3)
+    return "bg-gradient-to-br from-amber-400 to-yellow-400 text-white shadow-sm";
+  return "bg-surface-2 text-muted-foreground";
 }
 
 type HotSubTab = { key: string; label: string };
@@ -166,15 +176,17 @@ export function HotView() {
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden bg-background">
-      <header className="hidden shrink-0 border-b border-border px-4 py-4 sm:px-8 md:block">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <header className="glass-panel shrink-0 border-b border-border/60 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:px-8 md:pt-4 md:pb-4">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/10 text-orange-500">
-              <Flame className="h-5 w-5" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-sm">
+              <Flame className="h-[18px] w-[18px]" />
             </div>
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight">今日热榜</h2>
-              <p className="text-xs text-muted-foreground">
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold tracking-tight md:text-2xl">
+                今日热榜
+              </h2>
+              <p className="hidden text-xs text-muted-foreground md:block">
                 数据来自{" "}
                 <a
                   href="https://rebang.today/home"
@@ -192,26 +204,26 @@ export function HotView() {
             size="sm"
             onClick={() => loadItems(activeTab, subTab, subTabs, true)}
             disabled={refreshing}
-            className="gap-1.5"
+            className="h-9 gap-1.5 rounded-full"
           >
             <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
-            刷新
+            <span className="hidden sm:inline">刷新</span>
           </Button>
         </div>
       </header>
 
-      <div className="shrink-0 border-b border-border">
+      <div className="shrink-0 border-b border-border/60 bg-background/80">
         <div className="flex items-center gap-2 px-3 py-2 sm:px-6">
-          <div className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto scrollbar-thin">
+          <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto scrollbar-thin">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => switchTab(tab)}
                 className={cn(
-                  "flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] transition-colors",
+                  "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-150 active:scale-95",
                   activeTab === tab.key
-                    ? "bg-accent text-accent-foreground"
+                    ? "bg-accent text-accent-foreground shadow-sm"
                     : "bg-surface-2 text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -220,30 +232,18 @@ export function HotView() {
               </button>
             ))}
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => loadItems(activeTab, subTab, subTabs, true)}
-            disabled={refreshing}
-            className="h-7 w-7 shrink-0 md:hidden"
-            title="刷新"
-          >
-            <RefreshCw
-              className={cn("h-3.5 w-3.5", refreshing && "animate-spin")}
-            />
-          </Button>
         </div>
         {subTabs.length > 0 ? (
-          <div className="flex gap-0.5 overflow-x-auto border-t border-border px-3 py-1.5 sm:px-6 scrollbar-thin">
+          <div className="flex gap-1 overflow-x-auto border-t border-border/60 px-3 py-2 sm:px-6 scrollbar-thin">
             {subTabs.map((st) => (
               <button
                 key={st.key}
                 type="button"
                 onClick={() => switchSubTab(st.key)}
                 className={cn(
-                  "shrink-0 rounded-md px-2 py-0.5 text-[10px] font-medium",
+                  "shrink-0 rounded-full px-2.5 py-1 text-xs font-medium transition-colors duration-150 active:scale-95",
                   subTab === st.key
-                    ? "bg-surface-3 text-foreground"
+                    ? "bg-foreground/90 text-background"
                     : "text-muted-foreground hover:bg-surface-2"
                 )}
               >
@@ -254,9 +254,22 @@ export function HotView() {
         ) : null}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+      <div className="flex-1 overflow-y-auto px-3 pb-[calc(5rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pt-4 md:pb-6">
         {loading ? (
-          <p className="py-20 text-center text-muted-foreground">加载中…</p>
+          <ul className="mx-auto max-w-3xl space-y-2">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <li
+                key={i}
+                className="elevated flex gap-3 rounded-2xl border border-border/60 bg-surface-1 p-3.5"
+              >
+                <span className="h-8 w-8 shrink-0 animate-pulse rounded-xl bg-surface-2" />
+                <div className="flex-1 space-y-2">
+                  <span className="block h-3.5 w-4/5 animate-pulse rounded bg-surface-2" />
+                  <span className="block h-3 w-1/3 animate-pulse rounded bg-surface-2" />
+                </div>
+              </li>
+            ))}
+          </ul>
         ) : error ? (
           <div className="py-20 text-center">
             <p className="text-destructive">{error}</p>
@@ -268,57 +281,70 @@ export function HotView() {
               重试
             </Button>
           </div>
+        ) : items.length === 0 ? (
+          <p className="py-20 text-center text-sm text-muted-foreground">
+            暂无数据
+          </p>
         ) : (
           <ul className="mx-auto max-w-3xl space-y-2">
-            {items.map((item, index) => (
-              <li
-                key={item.item_key}
-                className="group elevated flex gap-3 rounded-2xl border border-border/60 bg-surface-1 p-3.5 transition-shadow hover:shadow-md"
-              >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-3 text-sm font-bold text-muted-foreground">
-                  {index + 1}
-                </span>
-                <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
-                  <div className="min-w-0">
+            {items.map((item, index) => {
+              const rank = index + 1;
+              return (
+                <li
+                  key={item.item_key}
+                  className="group elevated flex gap-3 rounded-2xl border border-border/60 bg-surface-1 p-3 transition-all duration-150 hover:shadow-md active:scale-[0.99] sm:p-3.5"
+                >
+                  <span
+                    className={cn(
+                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-sm font-bold",
+                      rankClasses(rank)
+                    )}
+                  >
+                    {rank}
+                  </span>
+                  <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
                     <a
                       href={item.www_url}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(event) => openHotLink(event, item.www_url)}
-                      className="text-sm font-medium leading-snug hover:text-accent"
+                      className="block min-w-0 flex-1"
                     >
-                      {item.title}
-                    </a>
-                    {item.heat_str ? (
-                      <p className="mt-1 text-xs text-orange-500/90">
-                        {item.heat_str}
+                      <p className="line-clamp-2 text-[15px] font-medium leading-snug text-foreground group-hover:text-accent sm:text-sm">
+                        {item.title}
                       </p>
-                    ) : null}
-                  </div>
-                  <div className="flex shrink-0 gap-0.5">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      title="转为待办"
-                      onClick={() => saveAsTask(item)}
-                    >
-                      <ListPlus className="h-3.5 w-3.5" />
-                    </Button>
-                    <a
-                      href={item.www_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="打开原文"
-                      onClick={(event) => openHotLink(event, item.www_url)}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-xl text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
+                      {item.heat_str ? (
+                        <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-orange-500/90">
+                          <TrendingUp className="h-3 w-3" />
+                          {item.heat_str}
+                        </p>
+                      ) : null}
                     </a>
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 rounded-xl active:scale-90 md:h-8 md:w-8"
+                        title="转为待办"
+                        onClick={() => saveAsTask(item)}
+                      >
+                        <ListPlus className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                      </Button>
+                      <a
+                        href={item.www_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="打开原文"
+                        onClick={(event) => openHotLink(event, item.www_url)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground active:scale-90 md:h-8 md:w-8"
+                      >
+                        <ExternalLink className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                      </a>
+                    </div>
                   </div>
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
