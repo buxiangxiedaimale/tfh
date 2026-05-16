@@ -72,6 +72,7 @@
   --color-memo-card-border: var(--memo-card-border);
   --color-memo-tag: var(--memo-tag);
   --color-memo-foreground: var(--memo-foreground);
+  --font-geist-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   --font-sans: var(--font-geist-sans);
 }
 

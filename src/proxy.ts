@@ -6,7 +6,7 @@ import {
   verifyAuthCookie,
 } from "@/lib/site-auth";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   if (!siteAuthEnabled()) {
     return NextResponse.next();
   }
