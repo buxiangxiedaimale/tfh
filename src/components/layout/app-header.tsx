@@ -39,7 +39,7 @@ export function AppHeader() {
   const showTaskActions = mode === "tasks";
 
   return (
-    <header className="glass-panel flex items-center gap-2 border-b border-border/60 px-3 py-2.5 lg:hidden">
+    <header className="glass-panel sticky top-0 z-20 flex items-center gap-2 border-b border-border/60 px-3 py-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] lg:hidden">
       {showTaskActions ? (
         <Button
           variant="ghost"
@@ -54,7 +54,7 @@ export function AppHeader() {
         <span className="w-9 shrink-0" />
       )}
 
-      <h1 className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight">
+      <h1 className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight sm:text-lg">
         {title}
       </h1>
 

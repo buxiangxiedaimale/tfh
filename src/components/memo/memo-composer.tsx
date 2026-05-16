@@ -19,7 +19,7 @@ export function MemoComposer() {
   };
 
   return (
-    <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 px-4 py-3 md:bottom-0 md:left-[68px] md:pb-[env(safe-area-inset-bottom)]">
+    <div className="fixed inset-x-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-20 px-4 py-3 md:bottom-0 md:left-[68px] md:pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto max-w-xl">
         <div className="elevated-md rounded-2xl border border-memo-card-border/80 bg-memo-card p-3 focus-within:ring-2 focus-within:ring-accent/25">
           <textarea

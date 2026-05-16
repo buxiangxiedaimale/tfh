@@ -170,7 +170,7 @@ export function MemoCard({ memo }: MemoCardProps) {
           <div
             role="dialog"
             aria-label="小记操作"
-            className="absolute inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] rounded-t-2xl border-t border-border bg-surface-1 shadow-2xl"
+            className="absolute inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] rounded-t-2xl border-t border-border bg-surface-1 shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
               <span className="text-sm font-medium text-muted-foreground">

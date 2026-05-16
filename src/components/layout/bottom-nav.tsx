@@ -25,7 +25,7 @@ export function BottomNav() {
       className="fixed inset-x-0 bottom-0 z-30 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 md:hidden"
       aria-label="主导航"
     >
-      <div className="glass-panel elevated-md mx-auto flex h-[52px] max-w-sm items-stretch justify-around rounded-2xl border border-border/60 px-1">
+      <div className="glass-panel elevated-md mx-auto flex h-[58px] max-w-sm items-stretch justify-around rounded-2xl border border-border/60 px-1.5">
         {tabs.map(({ mode, label, icon: Icon }) => {
           const active = current === mode;
           return (
@@ -34,16 +34,16 @@ export function BottomNav() {
               type="button"
               onClick={() => setAppMode(mode)}
               className={cn(
-                "relative flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] transition-all duration-200",
+                "relative flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] transition-all duration-200 active:scale-95",
                 active ? "text-accent" : "text-muted-foreground"
               )}
             >
               {active ? (
-                <span className="absolute inset-x-2 inset-y-1.5 rounded-lg bg-accent/10" />
+                <span className="absolute inset-x-1.5 inset-y-1 rounded-xl bg-accent-muted ring-1 ring-accent/20" />
               ) : null}
               <Icon
                 className={cn(
-                  "relative h-[18px] w-[18px]",
+                  "relative h-5 w-5 transition-transform",
                   active && "stroke-[2.5]"
                 )}
               />

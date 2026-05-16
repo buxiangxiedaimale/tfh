@@ -48,7 +48,7 @@ export function AppShell() {
         </>
       ) : null}
 
-      <main className="flex min-w-0 flex-1 flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
+      <main className="flex min-w-0 flex-1 flex-col pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
         <AppHeader />
         {tasksMode ? <TaskNavChips /> : null}
 
