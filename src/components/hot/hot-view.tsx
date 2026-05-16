@@ -56,14 +56,44 @@ const TOP_SUB_TABS = [
   { key: "monthly", label: "本月" },
 ];
 
+type HotRecommendationRecord = HotRecommendation & {
+  url?: string;
+  baseScore?: number;
+  llmScore?: number;
+  firstRecommendedAt?: string;
+  lastRecommendedAt?: string;
+  item: RebangHotItem & { source?: string };
+};
+
+type HotRunInfo = {
+  generatedAt: string;
+  durationMs: number | null;
+  candidateCount: number;
+  resultCount: number;
+  trigger: string;
+  configured: boolean;
+  profile: InterestProfile | null;
+};
+
+function formatRelative(iso?: string | null) {
+  if (!iso) return "";
+  const ts = new Date(iso).getTime();
+  if (!Number.isFinite(ts)) return "";
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return "刚刚";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
+  return `${Math.floor(diff / 86_400_000)} 天前`;
+}
+
 export function HotView() {
   const addTask = useTodoStore((s) => s.addTask);
   const [tabs, setTabs] = useState<RebangTab[]>([]);
   const [activeTab, setActiveTab] = useState("top");
   const [subTab, setSubTab] = useState("today");
   const [items, setItems] = useState<RebangHotItem[]>([]);
-  const [recommendations, setRecommendations] = useState<HotRecommendation[]>([]);
-  const [recommendedItems, setRecommendedItems] = useState<RebangHotItem[]>([]);
+  const [recommendations, setRecommendations] = useState<HotRecommendationRecord[]>([]);
+  const [runInfo, setRunInfo] = useState<HotRunInfo | null>(null);
   const [interestProfile, setInterestProfile] = useState<InterestProfile | null>(null);
   const [recommendationMode, setRecommendationMode] = useState(false);
   const [recommending, setRecommending] = useState(false);
@@ -80,12 +110,12 @@ export function HotView() {
 
   const itemSourceMap = useMemo(() => {
     const map = new Map<string, string>();
-    for (const item of recommendedItems) {
-      const source = "source" in item ? String(item.source ?? "") : "";
-      if (source) map.set(item.item_key, source);
+    for (const rec of recommendations) {
+      const source = rec.item?.source;
+      if (source) map.set(rec.itemKey, source);
     }
     return map;
-  }, [recommendedItems]);
+  }, [recommendations]);
 
   const subTabs = useMemo(() => {
     if (activeTab === "top") return TOP_SUB_TABS;
@@ -172,62 +202,84 @@ export function HotView() {
   const sourceName = currentTab?.name ?? activeTab;
 
   const recommendationMap = useMemo(
-    () => new Map(recommendations.map((item) => [item.itemKey, item])),
+    () => new Map(recommendations.map((rec) => [rec.itemKey, rec])),
     [recommendations]
   );
 
   const visibleItems = useMemo(() => {
     if (!recommendationMode) return items;
-    const sourceItems = recommendedItems.length ? recommendedItems : items;
-    const itemMap = new Map(sourceItems.map((item) => [item.item_key, item]));
-    return recommendations
-      .map((rec) => itemMap.get(rec.itemKey))
-      .filter(Boolean) as RebangHotItem[];
-  }, [items, recommendedItems, recommendationMode, recommendations]);
+    return recommendations.map((rec) => rec.item) as RebangHotItem[];
+  }, [items, recommendationMode, recommendations]);
 
-  const generateRecommendations = useCallback(async () => {
-    if (recommending) return;
-    setRecommending(true);
-    setRecommendationMode(true);
-    setRecommendations([]);
-    setRecommendationProgress("正在抓取全平台热榜...");
-    setError(null);
+  const applySnapshot = useCallback(
+    (snapshot: {
+      run?: HotRunInfo | null;
+      records?: HotRecommendationRecord[];
+    } | null) => {
+      if (!snapshot) return;
+      setRecommendations(snapshot.records ?? []);
+      setInterestProfile(snapshot.run?.profile ?? null);
+      setRunInfo(snapshot.run ?? null);
+    },
+    []
+  );
+
+  const loadCachedRecommendations = useCallback(async () => {
     try {
-      const progressTimer = window.setTimeout(() => {
-        setRecommendationProgress("正在生成向量并匹配你的兴趣...");
-      }, 2500);
-      const rerankTimer = window.setTimeout(() => {
-        setRecommendationProgress("正在让 AI 重排 Top 20...");
-      }, 8000);
       const res = await fetch("/api/recommendations/hot", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "global" }),
+        cache: "no-store",
       });
-      window.clearTimeout(progressTimer);
-      window.clearTimeout(rerankTimer);
+      if (!res.ok) return;
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "推荐失败");
-      setRecommendations(json.recommendations ?? []);
-      setRecommendedItems(json.items ?? []);
-      setInterestProfile(json.profile ?? null);
-      setRecommendationMode(true);
-      setRecommendationProgress("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "推荐失败");
-      setRecommendationProgress("");
-    } finally {
-      setRecommending(false);
+      applySnapshot(json);
+    } catch {
+      // 静默：初次加载失败不影响热榜主流程
     }
-  }, [recommending]);
+  }, [applySnapshot]);
+
+  const generateRecommendations = useCallback(
+    async (force = false) => {
+      if (recommending) return;
+      setRecommending(true);
+      setRecommendationMode(true);
+      setRecommendationProgress(
+        force ? "正在重新抓取知乎和微博..." : "正在读取最新推荐..."
+      );
+      setError(null);
+      try {
+        const progressTimer = window.setTimeout(() => {
+          setRecommendationProgress("正在生成向量并匹配你的兴趣...");
+        }, 2500);
+        const rerankTimer = window.setTimeout(() => {
+          setRecommendationProgress("正在让 AI 精选高匹配内容...");
+        }, 8000);
+        const res = await fetch("/api/recommendations/hot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ force }),
+        });
+        window.clearTimeout(progressTimer);
+        window.clearTimeout(rerankTimer);
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "推荐失败");
+        applySnapshot(json);
+        setRecommendationMode(true);
+        setRecommendationProgress(
+          json.cooldown ? "最近已生成推荐，已读取最新结果" : ""
+        );
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "推荐失败");
+        setRecommendationProgress("");
+      } finally {
+        setRecommending(false);
+      }
+    },
+    [recommending, applySnapshot]
+  );
 
   useEffect(() => {
-    if (!recommendationMode) return;
-    const timer = setInterval(() => {
-      void generateRecommendations();
-    }, 10 * 60 * 1000);
-    return () => clearInterval(timer);
-  }, [generateRecommendations, recommendationMode]);
+    void loadCachedRecommendations();
+  }, [loadCachedRecommendations]);
 
   const sendFeedback = async (item: RebangHotItem, kind: InterestKind) => {
     const source = itemSourceMap.get(item.item_key) ?? sourceName;
@@ -293,7 +345,7 @@ export function HotView() {
           </Button>
           <Button
             size="sm"
-            onClick={generateRecommendations}
+            onClick={() => generateRecommendations(true)}
             disabled={recommending}
             className="gap-1.5"
           >
@@ -307,7 +359,7 @@ export function HotView() {
         <div className="flex items-center gap-2 px-3 py-2 sm:px-6">
           <button
             type="button"
-            onClick={generateRecommendations}
+            onClick={() => generateRecommendations(true)}
             disabled={recommending}
             className={cn(
               "flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] transition-colors",
@@ -385,9 +437,14 @@ export function HotView() {
           <ul className="mx-auto max-w-3xl space-y-2">
             {recommendationMode && interestProfile ? (
               <li className="rounded-2xl border border-accent/20 bg-accent/5 p-3 text-xs text-muted-foreground">
-                <div className="flex items-center gap-2 font-medium text-foreground">
+                <div className="flex flex-wrap items-center gap-2 font-medium text-foreground">
                   <Sparkles className="h-4 w-4 text-accent" />
                   兴趣画像
+                  {runInfo ? (
+                    <span className="text-[10px] font-normal text-muted-foreground">
+                      生成于 {formatRelative(runInfo.generatedAt)} · {runInfo.resultCount} 条 · 候选 {runInfo.candidateCount}
+                    </span>
+                  ) : null}
                   <span className="ml-auto text-muted-foreground">
                     样本 {interestProfile.total} · 稍后看 {interestProfile.readLater}
                   </span>
@@ -412,14 +469,14 @@ export function HotView() {
             {recommendationMode && recommending ? (
               <li className="rounded-2xl border border-dashed border-accent/30 bg-accent/5 p-6 text-center text-sm text-muted-foreground">
                 <Sparkles className="mx-auto mb-2 h-5 w-5 animate-pulse text-accent" />
-                <p className="font-medium text-foreground">正在生成全局推荐</p>
+                <p className="font-medium text-foreground">正在生成精准推荐</p>
                 <p className="mt-1">{recommendationProgress || "正在计算..."}</p>
               </li>
             ) : null}
             {recommendationMode && recommendations.length === 0 ? (
               <li className="rounded-2xl border border-dashed border-border bg-surface-1 p-6 text-center text-sm text-muted-foreground">
                 {recommending
-                  ? "请稍等，我正在汇总多平台热榜。"
+                  ? "请稍等，我正在汇总知乎和微博。"
                   : "还没有足够的兴趣样本。先在热榜里点几条「感兴趣」，我就能开始学习。"}
               </li>
             ) : null}
@@ -520,11 +577,16 @@ export function HotView() {
                     {rec ? (
                       <div className="mt-2 rounded-xl bg-accent/5 px-3 py-2 text-xs text-muted-foreground">
                         <p className="text-foreground/80">{rec.reason}</p>
-                        {rec.matchedInterests.length ? (
-                          <p className="mt-1">
-                            匹配兴趣：{rec.matchedInterests.slice(0, 2).join("、")}
-                          </p>
-                        ) : null}
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                          {rec.matchedInterests.length ? (
+                            <span>
+                              匹配兴趣：{rec.matchedInterests.slice(0, 2).join("、")}
+                            </span>
+                          ) : null}
+                          {rec.firstRecommendedAt ? (
+                            <span>首次进入推荐 {formatRelative(rec.firstRecommendedAt)}</span>
+                          ) : null}
+                        </div>
                       </div>
                     ) : null}
                   </div>

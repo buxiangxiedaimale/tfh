@@ -1,6 +1,6 @@
 import {
-  readEmbeddingCache,
-  writeEmbeddingCache,
+  getEmbeddingFromDb,
+  putEmbeddingToDb,
 } from "@/lib/server-data/interest-store";
 import { normalizeText, textKey } from "@/lib/recommendation/text";
 
@@ -46,13 +46,12 @@ async function requestEmbedding(input: string): Promise<number[]> {
 export async function getEmbedding(text: string) {
   const normalized = normalizeText(text);
   const key = textKey(normalized);
-  const cache = await readEmbeddingCache();
-  if (cache[key]) {
-    return { key, embedding: cache[key] };
+  const cached = await getEmbeddingFromDb(key);
+  if (cached) {
+    return { key, embedding: cached };
   }
 
   const embedding = await requestEmbedding(normalized);
-  cache[key] = embedding;
-  await writeEmbeddingCache(cache);
+  await putEmbeddingToDb(key, embedding);
   return { key, embedding };
 }
