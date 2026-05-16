@@ -149,8 +149,6 @@ export function HotView() {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "加载失败");
         setItems(json.data.list ?? []);
-        setRecommendations([]);
-        setRecommendationMode(false);
       } catch (e) {
         setError(e instanceof Error ? e.message : "加载失败");
         setItems([]);
@@ -185,6 +183,7 @@ export function HotView() {
   }, [tabs.length, loadItems]);
 
   const switchTab = (tab: RebangTab) => {
+    setRecommendationMode(false);
     setActiveTab(tab.key);
     if (tab.key === "top") {
       setSubTab("today");
@@ -416,7 +415,10 @@ export function HotView() {
               <button
                 key={st.key}
                 type="button"
-                onClick={() => setSubTab(st.key)}
+                onClick={() => {
+                  setRecommendationMode(false);
+                  setSubTab(st.key);
+                }}
                 className={cn(
                   "shrink-0 rounded-md px-2 py-0.5 text-[10px] font-medium",
                   subTab === st.key
