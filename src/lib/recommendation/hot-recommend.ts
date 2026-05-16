@@ -49,7 +49,9 @@ const RECOMMENDATION_SOURCES: RecommendationSource[] = [
   { key: "weibo", label: "微博" },
 ];
 
-const MAX_SOURCE_PAGES = 20;
+// 单源单子 tab 最多翻页数（实际遇到 current_page >= total_page 或空列表会自动停）
+// 设到 200 仅作熔断，正常情况下知乎/微博远不到这个量
+const MAX_SOURCE_PAGES = 200;
 const POOL_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 const MANUAL_COOLDOWN_MS = 60 * 1000;
 const RECOMMENDATION_HARD_CAP = 80;

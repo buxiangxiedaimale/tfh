@@ -590,6 +590,22 @@ export function HotView() {
                     )}
                   />
                   <span className="font-medium text-foreground">个性化推荐</span>
+                  {runInfo ? (
+                    <span className="text-[10px] text-muted-foreground">
+                      推荐 {runInfo.resultCount} 条 · 候选池 {runInfo.candidateCount} 条 · {formatRelative(runInfo.generatedAt)}
+                    </span>
+                  ) : null}
+                  {userProfile ? (
+                    <span className="text-[10px] text-muted-foreground">
+                      画像样本 {userProfile.interestCount} 条
+                      {userProfile.stats.total !== userProfile.interestCount
+                        ? ` (现 ${userProfile.stats.total})`
+                        : ""}
+                      {" · "}
+                      正 {userProfile.stats.positive} / 负 {userProfile.stats.negative} / 稍后 {userProfile.stats.readLater}
+                      {userProfile.source === "fallback" ? " · 简易模式" : ""}
+                    </span>
+                  ) : null}
                   <Button
                     size="sm"
                     variant="secondary"

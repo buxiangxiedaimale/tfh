@@ -19,8 +19,8 @@ import { fallbackKeywords } from "./text";
  * ============================================================ */
 
 const REGEN_INTEREST_DELTA = 10; // 兴趣样本每涨 10 条就重新生成
-const MAX_SAMPLES_PER_KIND = 60; // 送给 LLM 的样本上限（控制 token）
-const REQUEST_TIMEOUT_MS = 90_000;
+const MAX_SAMPLES_PER_KIND = 200; // 送给 LLM 的样本上限（控制 token）
+const REQUEST_TIMEOUT_MS = 120_000; // 样本量增大后给更长超时
 
 const SYSTEM_PROMPT = `你是一位资深的个性化推荐分析师。
 基于用户的兴趣样本（正向、负向、稍后看），输出一份结构化用户画像。
