@@ -100,9 +100,33 @@ export function toMobileUrl(url: string): string {
     return u.toString();
   }
 
-  // 少数派
+  // 少数派：自适应良好，原样返回
   if (host === "sspai.com" || host === "www.sspai.com") {
-    // 少数派移动端使用同一域名，自适应良好
+    return u.toString();
+  }
+
+  // 虎嗅：响应式站点，原样返回
+  if (host === "www.huxiu.com" || host === "huxiu.com") {
+    return u.toString();
+  }
+
+  // 掘金：响应式站点，原样返回
+  if (host === "juejin.cn" || host === "www.juejin.cn") {
+    return u.toString();
+  }
+
+  // 吾爱破解：响应式 BBS，原样返回
+  if (host === "www.52pojie.cn" || host === "52pojie.cn") {
+    return u.toString();
+  }
+
+  // 小众软件：响应式站点
+  if (host === "www.appinn.com" || host === "appinn.com") {
+    return u.toString();
+  }
+
+  // 反斗限免：响应式站点
+  if (host === "www.kawaiifree.com" || host === "kawaiifree.com") {
     return u.toString();
   }
 

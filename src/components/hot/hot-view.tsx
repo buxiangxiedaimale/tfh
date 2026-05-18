@@ -11,7 +11,7 @@ import {
   TrendingUp,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { RebangHotItem, RebangTab } from "@/lib/rebang/types";
@@ -19,11 +19,7 @@ import {
   LEAF_TAB_DEFAULT_SUB,
   tabIconUrl,
 } from "@/lib/rebang/api";
-import {
-  isMobileEnv,
-  isStandalonePWA,
-  toMobileUrl,
-} from "@/lib/rebang/mobile-url";
+import { isMobileEnv, toMobileUrl } from "@/lib/rebang/mobile-url";
 import { useHotVisibleTabs } from "@/lib/hot/use-visible-tabs";
 import { useTodoStore } from "@/store/todo-store";
 
@@ -189,43 +185,18 @@ export function HotView() {
     });
   };
 
-  const openHotLink = (event: MouseEvent<HTMLAnchorElement>, url: string) => {
-    // 仅修饰键 / 中键交给浏览器原生行为（在新标签 / 新窗口打开），不要拦截
-    if (
-      event.defaultPrevented ||
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
-    ) {
-      return;
-    }
+  // 在客户端检测是否为移动端，仅用于决定是否应用 URL 转换。
+  // 不拦截点击事件：原生 <a target="_blank"> 点击才能在 iOS / Android 上
+  // 可靠触发 Universal Link / App Links，并在 PWA standalone 下正确交给系统浏览器。
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    setIsMobile(isMobileEnv());
+  }, []);
 
-    const mobile = isMobileEnv();
-    // 桌面浏览器：保持 <a target="_blank"> 默认行为即可
-    if (!mobile) return;
-
-    // 移动端：把 PC URL 转成移动端友好 URL
-    // 已安装对应 App 的用户，移动域同样会被 Universal Link / App Links 拦截，
-    // 仍能打开 App；未安装 App 的用户也能在浏览器看到正常页面，避免桌面页/登录墙。
-    const finalUrl = toMobileUrl(url);
-    event.preventDefault();
-
-    // PWA standalone：必须用 _blank 把链接交给系统浏览器处理；
-    // 否则 _self 会替换掉整个 PWA 窗口，且部分机型上会出现"点了没反应"。
-    if (isStandalonePWA()) {
-      const win = window.open(finalUrl, "_blank", "noopener,noreferrer");
-      if (!win) {
-        // 弹窗被拦截时退化为当前页跳转
-        window.location.href = finalUrl;
-      }
-      return;
-    }
-
-    // 普通移动浏览器：保持单页体验，原页面跳转
-    window.location.href = finalUrl;
-  };
+  const linkHref = useCallback(
+    (url: string) => (isMobile ? toMobileUrl(url) : url),
+    [isMobile]
+  );
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden bg-background">
@@ -392,10 +363,9 @@ export function HotView() {
                   </span>
                   <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
                     <a
-                      href={item.www_url}
+                      href={linkHref(item.www_url)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      onClick={(event) => openHotLink(event, item.www_url)}
                       className="block min-w-0 flex-1"
                     >
                       <p className="line-clamp-2 text-[15px] font-medium leading-snug text-foreground group-hover:text-accent sm:text-sm">
@@ -419,11 +389,10 @@ export function HotView() {
                         <ListPlus className="h-4 w-4 md:h-3.5 md:w-3.5" />
                       </Button>
                       <a
-                        href={item.www_url}
+                        href={linkHref(item.www_url)}
                         target="_blank"
                         rel="noopener noreferrer"
                         title="打开原文"
-                        onClick={(event) => openHotLink(event, item.www_url)}
                         className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground active:scale-90 md:h-8 md:w-8"
                       >
                         <ExternalLink className="h-4 w-4 md:h-3.5 md:w-3.5" />
