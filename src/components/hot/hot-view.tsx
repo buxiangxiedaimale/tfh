@@ -19,7 +19,11 @@ import {
   LEAF_TAB_DEFAULT_SUB,
   tabIconUrl,
 } from "@/lib/rebang/api";
-import { isMobileEnv, toMobileUrl } from "@/lib/rebang/mobile-url";
+import {
+  isMobileEnv,
+  isStandalonePWA,
+  toMobileUrl,
+} from "@/lib/rebang/mobile-url";
 import { useHotVisibleTabs } from "@/lib/hot/use-visible-tabs";
 import { useTodoStore } from "@/store/todo-store";
 
@@ -185,12 +189,26 @@ export function HotView() {
     });
   };
 
-  // 在客户端检测是否为移动端，仅用于决定是否应用 URL 转换。
-  // 不拦截点击事件：原生 <a target="_blank"> 点击才能在 iOS / Android 上
-  // 可靠触发 Universal Link / App Links，并在 PWA standalone 下正确交给系统浏览器。
+  // 在客户端检测环境：移动端是否需要做 URL 转换 + iOS PWA standalone
+  // 是否需要去掉 target=_blank（WebKit 已知 bug：iOS 添加到主屏幕的 PWA 中
+  // <a target="_blank"> 是空操作，点了完全没反应，参见
+  // https://bugs.webkit.org/show_bug.cgi?id=146224）。
+  // 在 iOS PWA standalone 下移除 target，iOS 会自动把跨域导航交给 Safari
+  // 打开新页面，且 Universal Link 的 App 唤起逻辑仍然正常。
   const [isMobile, setIsMobile] = useState(false);
+  const [linkTarget, setLinkTarget] = useState<"_blank" | undefined>(
+    "_blank"
+  );
   useEffect(() => {
     setIsMobile(isMobileEnv());
+    const ua =
+      typeof navigator !== "undefined" ? navigator.userAgent : "";
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    if (isIOS && isStandalonePWA()) {
+      setLinkTarget(undefined);
+    } else {
+      setLinkTarget("_blank");
+    }
   }, []);
 
   const linkHref = useCallback(
@@ -364,7 +382,7 @@ export function HotView() {
                   <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
                     <a
                       href={linkHref(item.www_url)}
-                      target="_blank"
+                      target={linkTarget}
                       rel="noopener noreferrer"
                       className="block min-w-0 flex-1"
                     >
@@ -390,7 +408,7 @@ export function HotView() {
                       </Button>
                       <a
                         href={linkHref(item.www_url)}
-                        target="_blank"
+                        target={linkTarget}
                         rel="noopener noreferrer"
                         title="打开原文"
                         className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground active:scale-90 md:h-8 md:w-8"
