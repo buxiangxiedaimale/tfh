@@ -19,6 +19,11 @@ import {
   LEAF_TAB_DEFAULT_SUB,
   tabIconUrl,
 } from "@/lib/rebang/api";
+import {
+  isMobileEnv,
+  isStandalonePWA,
+  toMobileUrl,
+} from "@/lib/rebang/mobile-url";
 import { useHotVisibleTabs } from "@/lib/hot/use-visible-tabs";
 import { useTodoStore } from "@/store/todo-store";
 
@@ -185,13 +190,41 @@ export function HotView() {
   };
 
   const openHotLink = (event: MouseEvent<HTMLAnchorElement>, url: string) => {
+    // 仅修饰键 / 中键交给浏览器原生行为（在新标签 / 新窗口打开），不要拦截
     if (
-      window.matchMedia("(pointer: coarse)").matches ||
-      /Android|iPhone|iPad|iPod|Mobile/i.test(window.navigator.userAgent)
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
     ) {
-      event.preventDefault();
-      window.open(url, "_self");
+      return;
     }
+
+    const mobile = isMobileEnv();
+    // 桌面浏览器：保持 <a target="_blank"> 默认行为即可
+    if (!mobile) return;
+
+    // 移动端：把 PC URL 转成移动端友好 URL
+    // 已安装对应 App 的用户，移动域同样会被 Universal Link / App Links 拦截，
+    // 仍能打开 App；未安装 App 的用户也能在浏览器看到正常页面，避免桌面页/登录墙。
+    const finalUrl = toMobileUrl(url);
+    event.preventDefault();
+
+    // PWA standalone：必须用 _blank 把链接交给系统浏览器处理；
+    // 否则 _self 会替换掉整个 PWA 窗口，且部分机型上会出现"点了没反应"。
+    if (isStandalonePWA()) {
+      const win = window.open(finalUrl, "_blank", "noopener,noreferrer");
+      if (!win) {
+        // 弹窗被拦截时退化为当前页跳转
+        window.location.href = finalUrl;
+      }
+      return;
+    }
+
+    // 普通移动浏览器：保持单页体验，原页面跳转
+    window.location.href = finalUrl;
   };
 
   return (
