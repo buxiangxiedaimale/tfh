@@ -11,7 +11,13 @@ import {
   TrendingUp,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MouseEvent,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { RebangHotItem, RebangTab } from "@/lib/rebang/types";
@@ -189,31 +195,44 @@ export function HotView() {
     });
   };
 
-  // 在客户端检测环境：移动端是否需要做 URL 转换 + iOS PWA standalone
-  // 是否需要去掉 target=_blank（WebKit 已知 bug：iOS 添加到主屏幕的 PWA 中
-  // <a target="_blank"> 是空操作，点了完全没反应，参见
-  // https://bugs.webkit.org/show_bug.cgi?id=146224）。
-  // 在 iOS PWA standalone 下移除 target，iOS 会自动把跨域导航交给 Safari
-  // 打开新页面，且 Universal Link 的 App 唤起逻辑仍然正常。
+  // 客户端检测环境。在移动端对 URL 做转换；在 iOS PWA standalone 下
+  // <a target="_blank"> 是 WebKit 已知 bug 的空操作（点了没反应，见
+  // https://bugs.webkit.org/show_bug.cgi?id=146224），必须拦截点击并手工
+  // 跳转；iOS 会把跨域 location.href 赋值自动交给 Safari 打开新页面，
+  // 且 Universal Link 的 App 唤起仍然生效。
   const [isMobile, setIsMobile] = useState(false);
-  const [linkTarget, setLinkTarget] = useState<"_blank" | undefined>(
-    "_blank"
-  );
+  const [isIOSStandalone, setIsIOSStandalone] = useState(false);
   useEffect(() => {
     setIsMobile(isMobileEnv());
     const ua =
       typeof navigator !== "undefined" ? navigator.userAgent : "";
     const isIOS = /iPhone|iPad|iPod/i.test(ua);
-    if (isIOS && isStandalonePWA()) {
-      setLinkTarget(undefined);
-    } else {
-      setLinkTarget("_blank");
-    }
+    setIsIOSStandalone(isIOS && isStandalonePWA());
   }, []);
 
   const linkHref = useCallback(
     (url: string) => (isMobile ? toMobileUrl(url) : url),
     [isMobile]
+  );
+
+  const handleHotLinkClick = useCallback(
+    (e: MouseEvent<HTMLAnchorElement>) => {
+      // 修饰键 / 中键 交给浏览器原生行为
+      if (
+        e.metaKey ||
+        e.ctrlKey ||
+        e.shiftKey ||
+        e.altKey ||
+        e.button !== 0
+      ) {
+        return;
+      }
+      if (!isIOSStandalone) return; // 其它环境依赖原生 target="_blank"
+      e.preventDefault();
+      const href = e.currentTarget.href;
+      window.location.href = href;
+    },
+    [isIOSStandalone]
   );
 
   return (
@@ -382,8 +401,9 @@ export function HotView() {
                   <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
                     <a
                       href={linkHref(item.www_url)}
-                      target={linkTarget}
-                      rel="noopener noreferrer"
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={handleHotLinkClick}
                       className="block min-w-0 flex-1"
                     >
                       <p className="line-clamp-2 text-[15px] font-medium leading-snug text-foreground group-hover:text-accent sm:text-sm">
@@ -408,8 +428,9 @@ export function HotView() {
                       </Button>
                       <a
                         href={linkHref(item.www_url)}
-                        target={linkTarget}
-                        rel="noopener noreferrer"
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={handleHotLinkClick}
                         title="打开原文"
                         className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground active:scale-90 md:h-8 md:w-8"
                       >
