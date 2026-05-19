@@ -26,8 +26,10 @@ import {
   tabIconUrl,
 } from "@/lib/rebang/api";
 import {
+  isAbsoluteHttpUrl,
   isMobileEnv,
   isStandalonePWA,
+  normalizeRebangUrl,
   toMobileUrl,
 } from "@/lib/rebang/mobile-url";
 import { useHotVisibleTabs } from "@/lib/hot/use-visible-tabs";
@@ -210,8 +212,15 @@ export function HotView() {
     setIsIOSStandalone(isIOS && isStandalonePWA());
   }, []);
 
+  // 先保证 URL 是绝对 http(s)（rebang 接口少数 tab 可能返回不带
+  // scheme 的裸域 URL，直接交给 <a href> 会被当作相对路径解析到
+  // 当前站点，点之后进项目 404 兼底路由跳回首页）。
   const linkHref = useCallback(
-    (url: string) => (isMobile ? toMobileUrl(url) : url),
+    (url: string) => {
+      const safe = normalizeRebangUrl(url);
+      if (!isAbsoluteHttpUrl(safe)) return undefined;
+      return isMobile ? toMobileUrl(safe) : safe;
+    },
     [isMobile]
   );
 
@@ -399,23 +408,35 @@ export function HotView() {
                     {rank}
                   </span>
                   <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
-                    <a
-                      href={linkHref(item.www_url)}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={handleHotLinkClick}
-                      className="block min-w-0 flex-1"
-                    >
-                      <p className="line-clamp-2 text-[15px] font-medium leading-snug text-foreground group-hover:text-accent sm:text-sm">
-                        {item.title}
-                      </p>
-                      {item.heat_str ? (
-                        <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-orange-500/90">
-                          <TrendingUp className="h-3 w-3" />
-                          {item.heat_str}
-                        </p>
-                      ) : null}
-                    </a>
+                    {(() => {
+                      const href = linkHref(item.www_url);
+                      const titleBlock = (
+                        <>
+                          <p className="line-clamp-2 text-[15px] font-medium leading-snug text-foreground group-hover:text-accent sm:text-sm">
+                            {item.title}
+                          </p>
+                          {item.heat_str ? (
+                            <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-orange-500/90">
+                              <TrendingUp className="h-3 w-3" />
+                              {item.heat_str}
+                            </p>
+                          ) : null}
+                        </>
+                      );
+                      return href ? (
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={handleHotLinkClick}
+                          className="block min-w-0 flex-1"
+                        >
+                          {titleBlock}
+                        </a>
+                      ) : (
+                        <div className="block min-w-0 flex-1">{titleBlock}</div>
+                      );
+                    })()}
                     <div className="flex shrink-0 items-center gap-0.5">
                       <Button
                         variant="ghost"
@@ -426,16 +447,22 @@ export function HotView() {
                       >
                         <ListPlus className="h-4 w-4 md:h-3.5 md:w-3.5" />
                       </Button>
-                      <a
-                        href={linkHref(item.www_url)}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={handleHotLinkClick}
-                        title="打开原文"
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground active:scale-90 md:h-8 md:w-8"
-                      >
-                        <ExternalLink className="h-4 w-4 md:h-3.5 md:w-3.5" />
-                      </a>
+                      {(() => {
+                        const href = linkHref(item.www_url);
+                        if (!href) return null;
+                        return (
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={handleHotLinkClick}
+                            title="打开原文"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground active:scale-90 md:h-8 md:w-8"
+                          >
+                            <ExternalLink className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                          </a>
+                        );
+                      })()}
                     </div>
                   </div>
                 </li>

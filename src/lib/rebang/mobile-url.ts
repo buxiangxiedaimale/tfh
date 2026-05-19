@@ -7,13 +7,43 @@
  * 2. 未安装 App 的用户：移动端站点排版可读，避免被桌面页 / 登录墙拦截。
  * 3. 未识别的域名原样返回，绝不破坏 URL。
  */
+/**
+ * 判断字符串是否是绝对的 http(s) URL（带 scheme）。
+ * 用来避免把无协议的 URL（例如 "www.ithome.com/xxx"）传给 <a href>，
+ * 那样浏览器会按相对路径解析成 "https://当前站点/www.ithome.com/xxx"，
+ * 命中站点 404 / 兜底逻辑后跳回首页，引发"点了之后跳到首页"的怪现象。
+ */
+export function isAbsoluteHttpUrl(url: string | undefined | null): boolean {
+  if (!url) return false;
+  return /^https?:\/\//i.test(url);
+}
+
+/**
+ * 标准化 rebang 接口返回的 URL：
+ * - 空 / 非字符串：原样返回
+ * - 缺少 scheme（例如 "www.ithome.com/xxx" 或 "//www.xxx.com/p"）：补全 https://
+ * - 已是 http(s) 绝对 URL：原样返回
+ */
+export function normalizeRebangUrl(url: string): string {
+  if (!url) return url;
+  const trimmed = url.trim();
+  if (!trimmed) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("//")) return "https:" + trimmed;
+  // 非 http 的特殊 scheme（mailto: / tel: / app:// 等）原样返回
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return trimmed;
+  // 否则当作裸域名，补 https://
+  return "https://" + trimmed;
+}
+
 export function toMobileUrl(url: string): string {
   if (!url) return url;
+  const normalized = normalizeRebangUrl(url);
   let u: URL;
   try {
-    u = new URL(url);
+    u = new URL(normalized);
   } catch {
-    return url;
+    return normalized;
   }
 
   const host = u.hostname.toLowerCase();
