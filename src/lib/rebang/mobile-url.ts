@@ -112,9 +112,16 @@ export function toMobileUrl(url: string): string {
   }
 
   // IT 之家
-  if (host === "www.ithome.com") {
-    u.hostname = "m.ithome.com";
-    return u.toString();
+  // PC 文章: https://www.ithome.com/0/AAA/BBB.htm
+  // 移动文章: https://m.ithome.com/html/AAABBB.htm
+  // 直接换 host 不行(m.ithome.com 上 /0/AAA/BBB.htm 是 404,会触发"链接不对,5s 后跳回首页")。
+  if (host === "www.ithome.com" || host === "ithome.com") {
+    const m = u.pathname.match(/^\/0\/(\d+)\/(\d+)\.htm$/);
+    if (m) {
+      return `https://m.ithome.com/html/${m[1]}${m[2]}.htm${u.search}`;
+    }
+    // 未识别的路径(如频道页 /xxx/),退回桌面 URL 让 IT 之家自己做 UA 适配
+    return url;
   }
 
   // 网易新闻
