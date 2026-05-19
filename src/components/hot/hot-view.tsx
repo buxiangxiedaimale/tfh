@@ -32,6 +32,10 @@ import {
   normalizeRebangUrl,
   toMobileUrl,
 } from "@/lib/rebang/mobile-url";
+import {
+  extractItemUrl,
+  type RebangAnyItem,
+} from "@/lib/rebang/item-url";
 import { useHotVisibleTabs } from "@/lib/hot/use-visible-tabs";
 import { useTodoStore } from "@/store/todo-store";
 
@@ -192,10 +196,19 @@ export function HotView() {
   const saveAsTask = (item: RebangHotItem) => {
     addTask({
       title: item.title.slice(0, 200),
-      description: item.www_url,
+      description: extractItemUrl(activeTab, item as unknown as RebangAnyItem),
       priority: "none",
     });
   };
+
+  // 按 tab 提取 item 的实际 URL。rebang 接口对不同平台返回
+  // 的字段完全不一致（IT 之家是 url、B 站是 bvid、抽引是
+  // aweme_id 等），这里统一走 extractItemUrl 解析。
+  const itemUrl = useCallback(
+    (item: RebangHotItem) =>
+      extractItemUrl(activeTab, item as unknown as RebangAnyItem),
+    [activeTab]
+  );
 
   // 客户端检测环境。在移动端对 URL 做转换；在 iOS PWA standalone 下
   // <a target="_blank"> 是 WebKit 已知 bug 的空操作（点了没反应，见
@@ -409,7 +422,7 @@ export function HotView() {
                   </span>
                   <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
                     {(() => {
-                      const href = linkHref(item.www_url);
+                      const href = linkHref(itemUrl(item));
                       const titleBlock = (
                         <>
                           <p className="line-clamp-2 text-[15px] font-medium leading-snug text-foreground group-hover:text-accent sm:text-sm">
@@ -448,7 +461,7 @@ export function HotView() {
                         <ListPlus className="h-4 w-4 md:h-3.5 md:w-3.5" />
                       </Button>
                       {(() => {
-                        const href = linkHref(item.www_url);
+                        const href = linkHref(itemUrl(item));
                         if (!href) return null;
                         return (
                           <a
